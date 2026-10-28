@@ -20,6 +20,7 @@ struct CoverView: View {
                     GeometryReader { geo in
                         ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"),
                                 spineOnRight: book.rightToLeft, style: kind, title: book.title)
+                            .printed(strength: large ? 1 : 0.75)
                             .frame(height: geo.size.height * kind.height(large: large))
                             .frame(maxHeight: .infinity, alignment: .bottom)
                     }
@@ -30,13 +31,13 @@ struct CoverView: View {
 
     @ViewBuilder private var face: some View {
         if style.wrapped {
-            PaperCover(style: style, book: book, large: large)
+            PaperCover(style: style, book: book, large: large).printed(strength: large ? 1 : 0.75)
         } else if let original {
             Color.clear
                 .overlay(Image(uiImage: original).resizable().scaledToFill())
                 .clipped()
         } else {
-            HouseCover(book: book, large: large)
+            HouseCover(book: book, large: large).printed(strength: large ? 1 : 0.75)
         }
     }
 }
@@ -69,19 +70,25 @@ struct PaperCover: View {
                 Gradient(colors: [.black.opacity(0.22), .black.opacity(0)]),
                 startPoint: CGPoint(x: spineOnRight ? size.width : 0, y: 0),
                 endPoint: CGPoint(x: spineOnRight ? size.width - spineWidth : spineWidth, y: 0)))
-
-            if style.showsLabel {
-                drawLabel(&ctx, size: size, unit: unit)
-            } else if let number = book.volume?.index {
-                drawVolume(&ctx, number: number, at: CGPoint(x: spineOnRight ? size.width * 0.2 : size.width * 0.8, y: size.height * 0.1),
-                           size: max(9, size.width * 0.075))
+            // A shop's paper is folded over the head and the foot of the boards: a doubled edge and
+            // its crease along each.
+            let turn = max(2, size.height * 0.012)
+            for y in [0, size.height - turn] {
+                ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: turn)), with: .color(.white.opacity(0.10)))
             }
+            for y in [turn, size.height - turn - 0.7 * unit] {
+                ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 0.7 * unit)), with: .color(.black.opacity(0.10)))
+            }
+
+            if style.showsLabel { drawLabel(&ctx, size: size, unit: unit) }
             switch style.stampShape {
             case .none: break
             case .seal: drawSeal(&ctx, size: size, unit: unit)
             case .circle, .square: drawStamp(&ctx, size: size, ink: ink, unit: unit)
             }
         }
+        // Patterns are drawn past the edges so they tile cleanly; the paper ends where the book does.
+        .clipped()
         .accessibilityElement()
         .accessibilityLabel("\(book.title), in a \(style.paper.label.lowercased()) paper cover")
     }
@@ -185,49 +192,77 @@ struct PaperCover: View {
     private func drawLabel(_ ctx: inout GraphicsContext, size: CGSize, unit: CGFloat) {
         let fontSize = max(9, size.width * 0.075)
         let vertical = book.rightToLeft
-        let paper = Color(hex: "F7F2E6")
         let inkColor = Color(hex: "2A241E")
+        // A volume number is printed on the slip when the title doesn't already carry it.
+        let number = book.series != nil ? book.volume?.index : nil
         if vertical {
             let chars = Array(book.title)
             let height = size.height * 0.55
-            let (columns, glyph) = Self.verticalSlip(count: chars.count, base: fontSize, height: height)
+            let numberRoom = number == nil ? 0 : fontSize * 1.6
+            let (columns, glyph) = Self.verticalSlip(count: chars.count, base: fontSize, height: height - numberRoom)
             let column = glyph * 1.15
             let rect = CGRect(x: size.width * 0.16, y: size.height * 0.07, width: glyph * 1.9 + column * CGFloat(columns - 1), height: height)
-            ctx.fill(Path(rect), with: .color(paper))
-            ctx.stroke(Path(rect.insetBy(dx: 2 * unit, dy: 2 * unit)), with: .color(inkColor.opacity(0.35)), lineWidth: 0.6 * unit)
+            var slip = pasteSlip(ctx, rect: rect, unit: unit)
             let perColumn = (chars.count + columns - 1) / columns
             for (i, ch) in chars.enumerated() {
                 let c = CGFloat(i / perColumn), row = CGFloat(i % perColumn)
-                ctx.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: glyph, bold: true)).foregroundColor(inkColor),
-                         at: CGPoint(x: rect.maxX - glyph * 0.95 - c * column, y: rect.minY + glyph * 0.9 + row * glyph * 1.08))
+                slip.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: glyph, bold: true)).foregroundColor(inkColor),
+                          at: CGPoint(x: rect.maxX - glyph * 0.95 - c * column, y: rect.minY + glyph * 0.9 + row * glyph * 1.08))
             }
-            if let number = book.volume?.index { drawVolume(&ctx, number: number, at: CGPoint(x: rect.maxX, y: rect.maxY), size: fontSize) }
+            if let number {
+                slip.draw(Text(Book.Volume.kanji(number)).font(Typesetter.swiftUIFont(.mincho, size: fontSize * 0.8)).foregroundColor(inkColor),
+                          at: CGPoint(x: rect.maxX - glyph * 0.95, y: rect.maxY - fontSize * 0.9))
+            }
         } else {
             let rect = CGRect(x: size.width * 0.14, y: size.height * 0.1, width: size.width * 0.72, height: size.height * 0.22)
-            ctx.fill(Path(rect), with: .color(paper))
-            ctx.stroke(Path(rect.insetBy(dx: 2 * unit, dy: 2 * unit)), with: .color(inkColor.opacity(0.35)), lineWidth: 0.6 * unit)
-            let byline = book.author.isEmpty ? 0 : fontSize * 0.95
+            var slip = pasteSlip(ctx, rect: rect, unit: unit)
+            let byline = book.author.isEmpty && number == nil ? 0 : fontSize * 0.95
             let room = CGRect(x: rect.minX + 6 * unit, y: rect.minY + 5 * unit,
                               width: rect.width - 12 * unit, height: rect.height - 10 * unit - byline)
-            let (lines, lineHeight) = Self.setTitle(book.title, ctx: ctx, width: room.width, height: room.height, base: fontSize)
+            let (lines, lineHeight) = Self.setTitle(book.title, ctx: slip, width: room.width, height: room.height, base: fontSize)
             let top = room.midY - lineHeight * CGFloat(lines.count) / 2
             for (i, line) in lines.enumerated() {
                 var line = line
                 line.shading = .color(inkColor)
-                ctx.draw(line, at: CGPoint(x: room.midX, y: top + lineHeight * (CGFloat(i) + 0.5)), anchor: .center)
+                slip.draw(line, at: CGPoint(x: room.midX, y: top + lineHeight * (CGFloat(i) + 0.5)), anchor: .center)
             }
-            if !book.author.isEmpty {
-                // The author too, shrunk rather than cut.
-                var author = ctx.resolve(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6)))
+            // The author (and the volume, when the title doesn't say), shrunk rather than cut.
+            let byText = [book.author, number.map { "Vol. \(Book.Volume.label($0))" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+            if !byText.isEmpty {
+                var author = slip.resolve(Text(byText).font(.custom("Literata-Italic", size: fontSize * 0.6)))
                 let wide = author.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
                 if wide > room.width {
-                    author = ctx.resolve(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6 * room.width / wide)))
+                    author = slip.resolve(Text(byText).font(.custom("Literata-Italic", size: fontSize * 0.6 * room.width / wide)))
                 }
                 author.shading = .color(inkColor.opacity(0.7))
-                ctx.draw(author, at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
+                slip.draw(author, at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
             }
-            if let number = book.volume?.index { drawVolume(&ctx, number: number, at: CGPoint(x: rect.maxX, y: rect.maxY), size: fontSize) }
         }
+    }
+
+    /// The title slip pasted on: washi a shade off the cover's colour, set a touch crooked, lifted
+    /// by its own thickness, with a thin printed frame. Returns the slip's context to write on.
+    private func pasteSlip(_ ctx: GraphicsContext, rect: CGRect, unit: CGFloat) -> GraphicsContext {
+        var rng = SeededRandom(string: book.id + "slip")
+        var slip = ctx
+        slip.translateBy(x: rect.midX, y: rect.midY)
+        slip.rotate(by: .degrees(Double.random(in: -0.7...0.7, using: &rng)))
+        slip.translateBy(x: -rect.midX, y: -rect.midY)
+        var lifted = slip
+        lifted.addFilter(.shadow(color: .black.opacity(0.22), radius: 0.9 * unit, x: 0.3 * unit, y: 0.7 * unit))
+        lifted.fill(Path(rect), with: .color(Color(hex: "F4EEE0")))
+        // Washi: long soft fibres, and its edges not quite straight.
+        for _ in 0..<Int(rect.width * rect.height / (60 * unit * unit)) {
+            let start = CGPoint(x: .random(in: rect.minX...rect.maxX, using: &rng), y: .random(in: rect.minY...rect.maxY, using: &rng))
+            let length = CGFloat.random(in: 4...14, using: &rng) * unit, angle = CGFloat.random(in: 0..<(.pi * 2), using: &rng)
+            var fibre = Path()
+            fibre.move(to: start)
+            fibre.addQuadCurve(to: CGPoint(x: start.x + cos(angle) * length, y: start.y + sin(angle) * length),
+                               control: CGPoint(x: start.x + cos(angle + 0.7) * length * 0.5, y: start.y + sin(angle + 0.7) * length * 0.5))
+            slip.stroke(fibre, with: .color(Color(hex: "B9AE98").opacity(.random(in: 0.12...0.3, using: &rng))), lineWidth: 0.4 * unit)
+        }
+        slip.stroke(Path(rect.insetBy(dx: 2.6 * unit, dy: 2.6 * unit)), with: .color(Color(hex: "2A241E").opacity(0.28)), lineWidth: 0.5 * unit)
+        return slip
     }
 
     /// A horizontal title in centred lines, broken between words, at the biggest size from `base`
@@ -258,15 +293,6 @@ struct PaperCover: View {
         }
     }
 
-    /// A volume's number on a round vermilion sticker, the way a series is told apart on the shelf.
-    private func drawVolume(_ ctx: inout GraphicsContext, number: Double, at centre: CGPoint, size: CGFloat) {
-        let d = size * 1.25
-        ctx.fill(Path(ellipseIn: CGRect(x: centre.x - d / 2, y: centre.y - d / 2, width: d, height: d)), with: .color(Color(hex: "C23A22")))
-        var text = ctx.resolve(Text(Book.Volume.label(number)).font(.system(size: size * 0.72, weight: .heavy, design: .serif)))
-        text.shading = .color(Color(hex: "F7F2E6"))
-        ctx.draw(text, at: centre)
-    }
-
     /// A vertical title slip's columns and type size: one column at the usual size if it fits,
     /// shrunk to fit if that keeps it readable (62%), else two columns.
     static func verticalSlip(count: Int, base: CGFloat, height: CGFloat) -> (columns: Int, size: CGFloat) {
@@ -283,34 +309,46 @@ struct PaperCover: View {
         var stamp = ctx
         stamp.translateBy(x: center.x, y: center.y)
         stamp.rotate(by: .degrees(-9))
-        stamp.opacity = 0.82
-        let box = CGRect(x: -diameter / 2, y: -diameter / 2, width: diameter, height: diameter)
-        let outline = style.stampShape == .circle ? Path(ellipseIn: box) : Path(roundedRect: box.insetBy(dx: 0, dy: diameter * 0.12), cornerRadius: 2 * unit)
-        stamp.stroke(outline, with: .color(ink), lineWidth: max(1, diameter * 0.035))
-        stamp.stroke(style.stampShape == .circle ? Path(ellipseIn: box.insetBy(dx: diameter * 0.07, dy: diameter * 0.07))
-                                                 : Path(roundedRect: box.insetBy(dx: diameter * 0.07, dy: diameter * 0.19), cornerRadius: unit),
-                     with: .color(ink), lineWidth: max(0.5, diameter * 0.012))
-        if style.paper == .basil {
-            var cat = stamp.resolve(Image(systemName: "cat.fill"))
-            cat.shading = .color(ink)
-            stamp.draw(cat, in: CGRect(x: -diameter * 0.16, y: -diameter * 0.3, width: diameter * 0.32, height: diameter * 0.26))
-        }
-        // One line, or two split at the space nearest the middle; each shrunk to fit the ring.
-        let lines = Self.stampLines(style.stamp)
-        let lineHeight = diameter * 0.15
-        let centerY = style.paper == .basil ? diameter * 0.16 : 0
-        for (i, line) in lines.enumerated() {
-            let base = diameter * 0.12
-            var text = stamp.resolve(Text(line).font(.system(size: base, weight: .heavy, design: .serif)).tracking(diameter * 0.008))
-            let width = text.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
-            let room = diameter * (lines.count == 1 ? 0.72 : 0.66)
-            if width > room {
-                text = stamp.resolve(Text(line).font(.system(size: base * room / width, weight: .heavy, design: .serif))
-                    .tracking(diameter * 0.008 * room / width))
+        stamp.opacity = 0.85
+        var rng = SeededRandom(string: book.id + style.stamp + "stamp")
+        stamp.drawLayer { stamp in
+            let box = CGRect(x: -diameter / 2, y: -diameter / 2, width: diameter, height: diameter)
+            let outline = style.stampShape == .circle ? Path(ellipseIn: box) : Path(roundedRect: box.insetBy(dx: 0, dy: diameter * 0.12), cornerRadius: 2 * unit)
+            stamp.stroke(outline, with: .color(ink), lineWidth: max(1, diameter * 0.035))
+            stamp.stroke(style.stampShape == .circle ? Path(ellipseIn: box.insetBy(dx: diameter * 0.07, dy: diameter * 0.07))
+                                                     : Path(roundedRect: box.insetBy(dx: diameter * 0.07, dy: diameter * 0.19), cornerRadius: unit),
+                         with: .color(ink), lineWidth: max(0.5, diameter * 0.012))
+            if style.paper == .basil {
+                var cat = stamp.resolve(Image(systemName: "cat.fill"))
+                cat.shading = .color(ink)
+                stamp.draw(cat, in: CGRect(x: -diameter * 0.16, y: -diameter * 0.3, width: diameter * 0.32, height: diameter * 0.26))
             }
-            text.shading = .color(ink)
-            let y = centerY + (CGFloat(i) - CGFloat(lines.count - 1) / 2) * lineHeight
-            stamp.draw(text, at: CGPoint(x: 0, y: y))
+            // One line, or two split at the space nearest the middle; each shrunk to fit the ring.
+            let lines = Self.stampLines(style.stamp)
+            let lineHeight = diameter * 0.15
+            let centerY = style.paper == .basil ? diameter * 0.16 : 0
+            for (i, line) in lines.enumerated() {
+                let base = diameter * 0.12
+                var text = stamp.resolve(Text(line).font(.system(size: base, weight: .heavy, design: .serif)).tracking(diameter * 0.008))
+                let width = text.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
+                let room = diameter * (lines.count == 1 ? 0.72 : 0.66)
+                if width > room {
+                    text = stamp.resolve(Text(line).font(.system(size: base * room / width, weight: .heavy, design: .serif))
+                        .tracking(diameter * 0.008 * room / width))
+                }
+                text.shading = .color(ink)
+                let y = centerY + (CGFloat(i) - CGFloat(lines.count - 1) / 2) * lineHeight
+                stamp.draw(text, at: CGPoint(x: 0, y: y))
+            }
+            // Pressed by hand: the ink skips in places, more towards one side.
+            stamp.blendMode = .destinationOut
+            for _ in 0..<Int(diameter * diameter / 5) {
+                let p = CGPoint(x: .random(in: box.minX...box.maxX, using: &rng), y: .random(in: box.minY...box.maxY, using: &rng))
+                guard CGFloat.random(in: 0...1, using: &rng) < 0.25 + 0.5 * (p.x - box.minX) / box.width else { continue }
+                let r = diameter * .random(in: 0.003...0.011, using: &rng)
+                stamp.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
+                           with: .color(.black.opacity(.random(in: 0.3...0.9, using: &rng))))
+            }
         }
     }
 

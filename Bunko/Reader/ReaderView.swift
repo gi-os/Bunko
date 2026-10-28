@@ -129,36 +129,59 @@ struct ClosedBookView: View {
     /// How much of the page block shows past the cover, in points.
     private let depth: CGFloat = 10
 
+    /// The shut book's size on a screen wider than a bunko (the Duo unfolded, a phone on its side):
+    /// a bunko's 105:148, nine tenths of the height, lying on the table. Nil when the book fills
+    /// the screen, as it does on a phone held upright.
+    static func bookSize(on screen: CGSize) -> CGSize? {
+        let bunko = 105.0 / 148.0
+        guard screen.height > 0, screen.width / screen.height > bunko * 1.1 else { return nil }
+        let height = screen.height * 0.9
+        return CGSize(width: height * bunko, height: height)
+    }
+
     var body: some View {
         GeometryReader { geo in
             let spineOnRight = model.book.rightToLeft
-            ZStack(alignment: .bottom) {
-                PageBlock(spineOnRight: spineOnRight, depth: depth)
-                CoverView(style: cover, book: model.book, original: original, large: true,
-                          wear: model.progress.wear, obi: Obi.closed(model.progress, japanese: japanese))
-                    // The board's own edge, catching the light at the fore-edge as it swings.
-                    .overlay(alignment: spineOnRight ? .leading : .trailing) {
-                        LinearGradient(colors: [.black.opacity(0.28), .black.opacity(0.06)],
-                                       startPoint: spineOnRight ? .leading : .trailing, endPoint: spineOnRight ? .trailing : .leading)
-                            .frame(width: 3)
+            let framed = Self.bookSize(on: geo.size)
+            ZStack {
+                // On a wide screen the book lies on the table; the open book waits behind it.
+                if framed != nil { ShelfBackground() }
+                ZStack(alignment: .bottom) {
+                    PageBlock(spineOnRight: spineOnRight, depth: depth)
+                    // On the table there's no open book under the cover, so it shows a blank first page.
+                    if framed != nil {
+                        Color(uiColor: model.settings.paper.color)
+                            .padding(spineOnRight ? .leading : .trailing, depth)
+                            .padding(.bottom, depth)
                     }
-                    .padding(spineOnRight ? .leading : .trailing, depth)
-                    .padding(.bottom, depth)
-                    // Opening: the cover turns on the spine (the right edge for a Japanese book).
-                    .rotation3DEffect(.degrees(swing * (spineOnRight ? 100 : -100)), axis: (x: 0, y: 1, z: 0),
-                                      anchor: spineOnRight ? .trailing : .leading, perspective: 0.45)
+                    CoverView(style: cover, book: model.book, original: original, large: true,
+                              wear: model.progress.wear, obi: Obi.closed(model.progress, japanese: japanese))
+                        // The board's own edge, catching the light at the fore-edge as it swings.
+                        .overlay(alignment: spineOnRight ? .leading : .trailing) {
+                            LinearGradient(colors: [.black.opacity(0.28), .black.opacity(0.06)],
+                                           startPoint: spineOnRight ? .leading : .trailing, endPoint: spineOnRight ? .trailing : .leading)
+                                .frame(width: 3)
+                        }
+                        .padding(spineOnRight ? .leading : .trailing, depth)
+                        .padding(.bottom, depth)
+                        // Opening: the cover turns on the spine (the right edge for a Japanese book).
+                        .rotation3DEffect(.degrees(swing * (spineOnRight ? 100 : -100)), axis: (x: 0, y: 1, z: 0),
+                                          anchor: spineOnRight ? .trailing : .leading, perspective: 0.45)
+                }
+                .frame(width: framed?.width ?? geo.size.width, height: framed?.height ?? geo.size.height)
+                .shadow(color: .black.opacity(framed != nil ? 0.3 : (drag == .zero && swing == 0 ? 0 : 0.35)), radius: framed != nil ? 18 : 24,
+                        y: framed != nil ? 8 : 0)
+                .rotationEffect(.degrees(Double(drag.width) / 30))
+                .offset(drag)
                 if showsHint {
                     Text("Tap to open · Swipe away to put it back")
                         .font(.caption)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .frame(maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
                 }
             }
-            .shadow(color: .black.opacity(drag == .zero && swing == 0 ? 0 : 0.35), radius: 24)
-            .rotationEffect(.degrees(Double(drag.width) / 30))
-            .offset(drag)
+            .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
             .onTapGesture { openCover() }
             .gesture(

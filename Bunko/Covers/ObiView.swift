@@ -142,8 +142,8 @@ struct ObiView: View {
         case .award:
             if let badge = copy.badge {
                 ZStack {
-                    Circle().fill(LinearGradient(colors: [Color(hex: "F0D486"), p.accent, Color(hex: "A9822E")],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                    // Gold printed flat, as obi ink is.
+                    Circle().fill(p.accent)
                     Circle().stroke(Color(hex: "8C6A22"), lineWidth: max(0.5, o * 0.012)).padding(o * 0.04)
                     Circle().stroke(Color(hex: "8C6A22").opacity(0.6), style: StrokeStyle(lineWidth: max(0.5, o * 0.008), dash: [o * 0.015, o * 0.015]))
                         .padding(o * 0.07)
@@ -160,10 +160,12 @@ struct ObiView: View {
             }
         case .fair:
             // The 応募券 to cut out, at the outer foot.
-            VStack(spacing: o * 0.01) {
-                Image(systemName: "cat.fill").font(.system(size: o * 0.09))
-                Text("応募券").font(.system(size: o * 0.07, weight: .bold)).lineLimit(1).minimumScaleFactor(0.5)
+            VStack(spacing: o * 0.008) {
+                Text("応募券").font(.system(size: o * 0.07, weight: .bold))
+                Text("\(season.label(japanese: true))").font(.system(size: o * 0.045, weight: .medium)).opacity(0.8)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
             .foregroundStyle(p.ink)
             .frame(width: o * 0.38, height: o * 0.32)
             .overlay(Rectangle().stroke(p.ink, style: StrokeStyle(lineWidth: max(0.5, o * 0.008), dash: [o * 0.018, o * 0.012])))
@@ -187,11 +189,7 @@ struct ObiView: View {
     private func text(_ copy: ObiCopy, _ p: Palette, u: CGFloat, w: CGFloat) -> some View {
         VStack(spacing: u * 0.05) {
             if let label = copy.label {
-                // The fair's mascot rides in its label.
-                HStack(spacing: u * 0.03) {
-                    Image(systemName: "cat.fill").font(.system(size: u * 0.075))
-                    Text(label).font(.system(size: u * 0.085, weight: .heavy, design: .rounded)).tracking(u * 0.01)
-                }
+                Text(label).font(.system(size: u * 0.085, weight: .heavy, design: .rounded)).tracking(u * 0.01)
                 .foregroundStyle(p.paper)
                 .padding(.horizontal, u * 0.08)
                 .padding(.vertical, u * 0.015)
