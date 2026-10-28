@@ -69,3 +69,11 @@ struct ObiTests {
         #expect(settings.face(for: neko) == .mincho)
     }
 }
+
+struct StampTests {
+    @Test func longStampsSplitNearTheMiddle() {
+        #expect(PaperCover.stampLines("Bunko") == ["BUNKO"])
+        #expect(PaperCover.stampLines("BASIL BOOKS · LES") == ["BASIL BOOKS", "LES"])
+        #expect(PaperCover.stampLines("Kinokuniya Shinjuku") == ["KINOKUNIYA", "SHINJUKU"])
+    }
+}

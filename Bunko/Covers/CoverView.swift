@@ -172,12 +172,37 @@ struct PaperCover: View {
             cat.shading = .color(ink)
             stamp.draw(cat, in: CGRect(x: -diameter * 0.16, y: -diameter * 0.3, width: diameter * 0.32, height: diameter * 0.26))
         }
-        let text = Text(style.stamp.uppercased())
-            .font(.system(size: max(5, diameter * 0.12), weight: .heavy, design: .serif))
-            .tracking(diameter * 0.01)
-            .foregroundColor(ink)
-        stamp.draw(text, in: CGRect(x: -diameter * 0.38, y: style.paper == .basil ? diameter * 0.02 : -diameter * 0.2,
-                                     width: diameter * 0.76, height: diameter * 0.4))
+        // One line, or two split at the space nearest the middle; each shrunk to fit the ring.
+        let lines = Self.stampLines(style.stamp)
+        let lineHeight = diameter * 0.15
+        let centerY = style.paper == .basil ? diameter * 0.16 : 0
+        for (i, line) in lines.enumerated() {
+            let base = diameter * 0.12
+            var text = stamp.resolve(Text(line).font(.system(size: base, weight: .heavy, design: .serif)).tracking(diameter * 0.008))
+            let width = text.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
+            let room = diameter * (lines.count == 1 ? 0.72 : 0.66)
+            if width > room {
+                text = stamp.resolve(Text(line).font(.system(size: base * room / width, weight: .heavy, design: .serif))
+                    .tracking(diameter * 0.008 * room / width))
+            }
+            text.shading = .color(ink)
+            let y = centerY + (CGFloat(i) - CGFloat(lines.count - 1) / 2) * lineHeight
+            stamp.draw(text, at: CGPoint(x: 0, y: y))
+        }
+    }
+
+    static func stampLines(_ stamp: String) -> [String] {
+        let text = stamp.uppercased().trimmingCharacters(in: .whitespaces)
+        guard text.count > 11, text.contains(" ") else { return [text] }
+        if let dot = text.range(of: " · ") {
+            return [String(text[..<dot.lowerBound]), String(text[dot.upperBound...])]
+        }
+        let middle = text.count / 2
+        let spaces = text.indices.filter { text[$0] == " " }
+        let split = spaces.min { abs(text.distance(from: text.startIndex, to: $0) - middle) < abs(text.distance(from: text.startIndex, to: $1) - middle) }!
+        let first = text[..<split].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
+        let second = text[text.index(after: split)...].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
+        return [first, second].filter { !$0.isEmpty }
     }
 }
 
