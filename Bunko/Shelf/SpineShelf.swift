@@ -86,7 +86,10 @@ struct BookSpine: View {
     let width: CGFloat
     static let height: CGFloat = 214
 
-    private var japanese: Bool { book.rightToLeft && !book.rowsRightToLeft }
+    /// Columns down the spine for a Japanese book; everything else runs top to bottom.
+    private var japanese: Bool { book.setVertically }
+    /// An English edition: the house's English name and colophon letter, as its cover has them.
+    private var english: Bool { !book.printsJapanese }
     private var house: House { .of(book, imprint: style.house) }
     private var colour: Color { Color(hex: house.colour) }
     private let cream = Color(hex: "F5F0E4")
@@ -214,15 +217,22 @@ struct BookSpine: View {
         .overlay(RoundedRectangle(cornerRadius: 2).stroke(colour, lineWidth: 0.5))
     }
 
-    /// The house's colophon, its kanji printed in a ring, and its name, as the covers carry them.
+    /// The house's colophon in its printed ring and its name, as the covers carry them: the kanji
+    /// and the name in a column for a Japanese book; for an English edition the letter in Literata
+    /// and the name in tracked capitals, run down the spine.
     private func foot(_ colour: Color) -> some View {
         VStack(spacing: 2) {
-            Text(house.imprint.colophon)
-                .font(Typesetter.swiftUIFont(.mincho, size: 6.5, bold: true))
+            Text(house.imprint.colophon(english: english))
+                .font(Typesetter.swiftUIFont(english ? .serif : .mincho, size: 6.5, bold: true))
                 .frame(width: 11, height: 11)
                 .overlay(Circle().stroke(colour, lineWidth: 0.6))
-            SpineText(house.imprint.name, vertical: true, size: 6.5, bold: true, colour: colour)
-                .frame(height: 29)
+            if english {
+                SpineText(house.imprint.englishName.uppercased(), vertical: false, size: 6, bold: true, colour: colour, tracking: 0.6)
+                    .frame(height: 48)
+            } else {
+                SpineText(house.imprint.name, vertical: true, size: 6.5, bold: true, colour: colour)
+                    .frame(height: 29)
+            }
         }
         .foregroundStyle(colour)
         .padding(.bottom, 5)
@@ -264,16 +274,21 @@ struct SpineText: View {
     let vertical: Bool
     let size: CGFloat
     let bold: Bool
-    let colour: Color
+    /// The ink: a colour, or a gradient for foil.
+    let colour: AnyShapeStyle
     var gothic = false
+    /// Letter-spacing for lettering run on its side (an English imprint in capitals).
+    var tracking: CGFloat = 0
 
-    init(_ text: String, vertical: Bool, size: CGFloat, bold: Bool, colour: Color, gothic: Bool = false) {
+    init<Ink: ShapeStyle>(_ text: String, vertical: Bool, size: CGFloat, bold: Bool, colour: Ink, gothic: Bool = false,
+                          tracking: CGFloat = 0) {
         self.text = text
         self.vertical = vertical
         self.size = size
         self.bold = bold
-        self.colour = colour
+        self.colour = AnyShapeStyle(colour)
         self.gothic = gothic
+        self.tracking = tracking
     }
 
     var body: some View {
@@ -292,16 +307,26 @@ struct SpineText: View {
                 .foregroundStyle(colour)
                 .frame(width: w, height: h, alignment: .top)
             } else {
+                // Measured to fit the length of the spine, never cut short.
                 Text(text)
-                    .font(font(size))
+                    .font(font(fitted(to: h * 0.98)))
+                    .tracking(tracking)
                     .foregroundStyle(colour)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.2)
+                    .fixedSize()
                     .frame(width: h, height: w)
                     .rotationEffect(.degrees(90))
                     .frame(width: w, height: h)
             }
         }
+    }
+
+    /// The size that sets the whole of `text` on one line no longer than `length`.
+    private func fitted(to length: CGFloat) -> CGFloat {
+        let uiFont = gothic ? UIFont.systemFont(ofSize: size, weight: bold ? .heavy : .regular)
+                            : Typesetter.font(.serif, size: size, bold: bold)
+        let width = (text as NSString).size(withAttributes: [.font: uiFont, .kern: tracking]).width
+        return width > length && width > 0 ? size * length / width : size
     }
 
     private func font(_ points: CGFloat) -> Font {
@@ -412,9 +437,11 @@ extension BookSpine {
                 .blendMode(.softLight)
                 VStack(spacing: gap) {
                     gold.frame(height: 1).padding(.top, h * 0.04)
-                    gold.mask(title(.white, false)).frame(maxHeight: .infinity)
-                    gold.mask(byline(.white))
-                    gold.mask(Text(house.imprint.colophon).font(Typesetter.swiftUIFont(.mincho, size: 7, bold: true)))
+                    SpineText(book.title, vertical: japanese, size: w * 0.5, bold: true, colour: gold).frame(maxHeight: .infinity)
+                    SpineText(book.author, vertical: japanese, size: w * 0.32, bold: false, colour: gold).frame(height: h * 0.15)
+                    Text(house.imprint.colophon(english: english))
+                        .font(Typesetter.swiftUIFont(english ? .serif : .mincho, size: 7, bold: true))
+                        .foregroundStyle(gold)
                         .frame(width: 12, height: 12)
                     gold.frame(height: 1).padding(.bottom, h * 0.04)
                 }
