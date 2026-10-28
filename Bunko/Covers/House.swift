@@ -48,10 +48,13 @@ struct House: Equatable {
 
     static func of(_ book: Book) -> House {
         let author = book.author.trimmingCharacters(in: .whitespaces)
-        let byBook = hash(book.id), byAuthor = hash(author.isEmpty ? book.title : author)
-        return House(imprint: Imprint.allCases[byBook % Imprint.allCases.count],
+        // A series shares its house and colour; its volumes are numbered in the shelf code.
+        let byDesign = hash(book.designKey), byBook = hash(book.id)
+        let byAuthor = hash(book.volume?.series ?? (author.isEmpty ? book.title : author))
+        let number = book.volume?.index.map { Int($0) } ?? byBook % 40 + 1
+        return House(imprint: Imprint.allCases[byDesign % Imprint.allCases.count],
                      colour: authorColours[byAuthor % authorColours.count],
-                     shelfCode: "\(initial(of: author.isEmpty ? book.title : author)) \(byAuthor % 60 + 1) \(byBook % 40 + 1)",
+                     shelfCode: "\(initial(of: author.isEmpty ? book.title : author)) \(byAuthor % 60 + 1) \(number)",
                      price: 400 + hash(book.id + "¥") % 50 * 10)
     }
 
@@ -104,6 +107,7 @@ struct HouseCover: View {
             ZStack {
                 face(w: w, h: h)
                 Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile).blendMode(.multiply).opacity(0.5)
+                if let number = book.volume?.index { volume(number, w: w) }
             }
             .frame(width: w, height: h)
             .clipped()
@@ -273,6 +277,20 @@ struct HouseCover: View {
         .lineLimit(1)
         .minimumScaleFactor(0.5)
         .padding(.bottom, w * 0.06)
+    }
+
+    /// A series volume's number, in a roundel at the head of the fore-edge.
+    private func volume(_ number: Double, w: CGFloat) -> some View {
+        let onColour = house.imprint == .tsukikage || house.imprint == .todai
+        return Text(Book.Volume.label(number))
+            .font(Typesetter.swiftUIFont(.mincho, size: w * 0.08, bold: true))
+            .foregroundStyle(onColour ? colour : cream)
+            .frame(width: w * 0.14, height: w * 0.14)
+            .background(Circle().fill(onColour ? cream : colour))
+            .overlay(Circle().stroke(onColour ? colour : cream, lineWidth: max(0.5, w * 0.006)).padding(w * 0.01))
+            .padding(w * (house.imprint == .tsukikage ? 0.1 : 0.05))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: vertical ? .topLeading : .topTrailing)
+            .padding(.top, house.imprint == .chidori ? w * 0.02 : w * 0.1)
     }
 
     /// 青林's stripe down the spine side, its name set vertically in it.

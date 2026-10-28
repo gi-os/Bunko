@@ -60,7 +60,7 @@ final class Library {
             let boundOnRight = epub.declaresDirection ? epub.rightToLeft : Book.boundOnRight(language: epub.language)
             book = Book(id: id, title: title, author: epub.author, fileName: "\(id).epub", format: .epub,
                         language: epub.language, rightToLeft: rightToLeft ?? boundOnRight,
-                        addedAt: .now, shopID: shopID)
+                        addedAt: .now, shopID: shopID, series: epub.series, seriesIndex: epub.seriesIndex)
             cover = epub.coverImageData()
         } else if let text = PlainText.decode(data) {
             let language = Script.language(of: text)

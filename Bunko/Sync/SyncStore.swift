@@ -142,9 +142,26 @@ extension SyncStore {
         value(CoverStyle.self, "cover.\(book.id)")
     }
 
+    /// Its own style, or its series' (so a volume added later wears the set's), or one picked for it.
     func cover(for book: Book) -> CoverStyle {
-        storedCover(for: book)
+        storedCover(for: book) ?? seriesCover(for: book)
             ?? CoverStyle.automatic(for: book, shopStamp: shops.first { $0.id == book.shopID }?.stamp)
+    }
+
+    /// The style chosen for a book's whole series.
+    func seriesCover(for book: Book) -> CoverStyle? {
+        guard book.volume != nil else { return nil }
+        return value(CoverStyle.self, Self.seriesKey(book))
+    }
+
+    func setSeriesCover(_ style: CoverStyle, for book: Book) {
+        guard book.volume != nil else { return }
+        set(style, Self.seriesKey(book))
+    }
+
+    /// iCloud keys are capped at 64 bytes, so the series is hashed.
+    private static func seriesKey(_ book: Book) -> String {
+        "cover.series." + Book.stableID(title: book.designKey, author: "")
     }
 
     func setCover(_ style: CoverStyle, for book: Book) {

@@ -19,6 +19,83 @@ struct Book: Codable, Identifiable, Hashable {
     var rightToLeft: Bool
     var addedAt: Date
     var shopID: UUID?
+    /// The series it belongs to and its place in it, from the book's own metadata.
+    var series: String?
+    var seriesIndex: Double?
+
+    /// A volume of a series: its name and number.
+    struct Volume: Equatable {
+        var series: String
+        var index: Double?
+
+        /// 3, or 2.5 for an in-between volume.
+        static func label(_ index: Double) -> String {
+            index.rounded() == index ? String(Int(index)) : String(format: "%g", index)
+        }
+    }
+
+    /// Its series, from its metadata or else its title (Vol. 3, 第3巻, (3)), so books that came
+    /// without the metadata still find their set.
+    var volume: Volume? {
+        if let series, !series.trimmingCharacters(in: .whitespaces).isEmpty {
+            return Volume(series: series.trimmingCharacters(in: .whitespaces), index: seriesIndex)
+        }
+        return Self.volume(fromTitle: title)
+    }
+
+    /// What picks its automatic design: the series if it's in one, so the set looks alike.
+    var designKey: String {
+        volume.map { "series:" + $0.series.lowercased() } ?? id
+    }
+
+    /// A series and number read off a title: "Name, Vol. 3", "Name Book 2", "Name #4", "Name (3)",
+    /// "名前 第3巻", "名前 3巻", "名前 第三巻", "名前（３）", and for a Japanese title "名前 3".
+    static func volume(fromTitle title: String) -> Volume? {
+        let text = title.trimmingCharacters(in: .whitespaces)
+        let patterns = [
+            #"^(.+?)[\s,:;.\-–—]+(?:vol\.?|volume|book|part|no\.|#)\s*(\d+(?:\.\d+)?)\b.*$"#,
+            #"^(.+?)\s*第\s*([0-9０-９〇一二三四五六七八九十百]+)\s*[巻部集]\s*.*$"#,
+            #"^(.+?)\s+([0-9０-９]+)\s*巻\s*.*$"#,
+            #"^(.+?)\s*[（(]\s*([0-9０-９]{1,3})\s*[)）]\s*$"#,
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  let name = Range(match.range(at: 1), in: text), let number = Range(match.range(at: 2), in: text),
+                  let index = numeral(String(text[number]))
+            else { continue }
+            let series = text[name].trimmingCharacters(in: CharacterSet(charactersIn: " ,:;.-–—　"))
+            if !series.isEmpty { return Volume(series: series, index: index) }
+        }
+        // A bare trailing number only for a Japanese title (ワンピース 3); "Fahrenheit 451" isn't a series.
+        if Script.looksJapanese(text),
+           let regex = try? NSRegularExpression(pattern: #"^(.+?)[\s　]+([0-9０-９]{1,3})$"#),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+           let name = Range(match.range(at: 1), in: text), let number = Range(match.range(at: 2), in: text),
+           let index = numeral(String(text[number])) {
+            return Volume(series: String(text[name]), index: index)
+        }
+        return nil
+    }
+
+    /// 3, ３, 三, 十二, 二十 as a number.
+    static func numeral(_ text: String) -> Double? {
+        let ascii = String(text.map { ch -> Character in
+            guard let v = ch.unicodeScalars.first?.value, (0xFF10...0xFF19).contains(v) else { return ch }
+            return Character(UnicodeScalar(v - 0xFF10 + 0x30)!)
+        })
+        if let value = Double(ascii) { return value }
+        let digits: [Character: Int] = ["〇": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9]
+        var total = 0, current = 0
+        for ch in ascii {
+            if let d = digits[ch] { current = d }
+            else if ch == "十" { total += max(current, 1) * 10; current = 0 }
+            else if ch == "百" { total += max(current, 1) * 100; current = 0 }
+            else { return nil }
+        }
+        let value = total + current
+        return value > 0 ? Double(value) : nil
+    }
 
     static func stableID(title: String, author: String) -> String {
         let key = (title + "\u{1F}" + author).precomposedStringWithCanonicalMapping.lowercased()

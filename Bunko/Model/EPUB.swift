@@ -7,6 +7,9 @@ struct EPUB {
     var title: String
     var author: String
     var language: String
+    /// Its series and number: calibre's metadata, or EPUB 3's collection and its position.
+    var series: String?
+    var seriesIndex: Double?
     var rightToLeft: Bool
     /// The spine says which way its pages go (rtl or ltr); otherwise the language decides.
     var declaresDirection: Bool
@@ -26,6 +29,16 @@ struct EPUB {
         title = metadata?.first("title")?.trimmedText ?? ""
         author = metadata?.all("creator").map(\.trimmedText).filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
         language = metadata?.first("language")?.trimmedText ?? ""
+        let metas = metadata?.all("meta") ?? []
+        if let calibre = metas.first(where: { $0["name"] == "calibre:series" })?["content"], !calibre.isEmpty {
+            series = calibre
+            seriesIndex = metas.first(where: { $0["name"] == "calibre:series_index" })?["content"].flatMap(Double.init)
+        } else if let collection = metas.first(where: { $0["property"] == "belongs-to-collection" && !$0.trimmedText.isEmpty }) {
+            series = collection.trimmedText
+            let refines = collection["id"].map { "#" + $0 }
+            seriesIndex = metas.first(where: { $0["refines"] == refines && $0["property"] == "group-position" })
+                .flatMap { Double($0.trimmedText) }
+        }
 
         var manifest: [String: (href: String, properties: String)] = [:]
         for item in package.first("manifest")?.all("item") ?? [] {
