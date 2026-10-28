@@ -6,6 +6,25 @@ import SwiftUI
 struct Obi: Equatable {
     var headline: String
     var detail: String
+    /// A finished book's obi is printed in vermilion, so the shelf shows at a glance what's read.
+    var finished = false
+    /// How far through, for the hairline meter on the obi of a book being read.
+    var fraction: Double?
+
+    /// The headline cut into runs of digits and the rest: the numbers are set big and in red.
+    static func runs(_ headline: String) -> [(text: String, number: Bool)] {
+        var runs: [(text: String, number: Bool)] = []
+        for ch in headline {
+            // Digits only: 一 and 十 have numeric values too, but they're words here.
+            let number = ch.unicodeScalars.allSatisfy { $0.properties.generalCategory == .decimalNumber }
+            if let last = runs.last, last.number == number {
+                runs[runs.count - 1].text.append(ch)
+            } else {
+                runs.append((String(ch), number))
+            }
+        }
+        return runs
+    }
 
     static func finished(_ progress: ReadingProgress?, japanese: Bool, calendar: Calendar = .current) -> Obi? {
         guard let progress, let finished = progress.finishedAt else { return nil }
@@ -17,8 +36,8 @@ struct Obi: Equatable {
         let date = format.string(from: finished)
         let start = calendar.startOfDay(for: progress.startedAt ?? finished)
         let days = max(1, (calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: finished)).day ?? 0) + 1)
-        if japanese { return Obi(headline: "読了", detail: "\(date)・\(days)日間") }
-        return Obi(headline: "Finished", detail: "\(date) · \(days == 1 ? "in a day" : "in \(days) days")")
+        if japanese { return Obi(headline: "読了", detail: "\(date)・\(days)日間", finished: true) }
+        return Obi(headline: "Finished", detail: "\(date) · \(days == 1 ? "in a day" : "in \(days) days")", finished: true)
     }
 
     /// The closed book in your hands: finished, or today's reading, or nothing for a book not yet begun.
@@ -29,34 +48,62 @@ struct Obi: Equatable {
         guard today > 0 || progress.fraction > 0 else { return nil }
         let percent = Int((progress.fraction * 100).rounded())
         if japanese {
-            return Obi(headline: today > 0 ? "今日 \(today)ページ" : "続きから", detail: "全体の\(percent)%")
+            return Obi(headline: today > 0 ? "今日 \(today)ページ" : "続きから", detail: "全体の\(percent)%", fraction: progress.fraction)
         }
         return Obi(headline: today > 0 ? "\(today) \(today == 1 ? "page" : "pages") today" : "Pick up where you left off",
-                   detail: "\(percent)% through")
+                   detail: "\(percent)% through", fraction: progress.fraction)
     }
 }
 
+/// The obi as printed: cream paper with a vermilion double rule, the headline in bold with its
+/// number set big in red, and a hairline meter filling from the spine; a finished book's obi is
+/// vermilion with cream type. Darker where it turns round the spine.
 struct ObiView: View {
     let obi: Obi
     let japanese: Bool
+    var spineOnRight = false
+
+    private var paper: Color { Color(hex: obi.finished ? "B5362A" : "F6F1E5") }
+    private var ink: Color { Color(hex: obi.finished ? "F7EEDB" : "2A241E") }
+    private var accent: Color { Color(hex: obi.finished ? "F7EEDB" : "B5362A") }
 
     var body: some View {
         GeometryReader { geo in
             let h = geo.size.height
+            let w = geo.size.width
+            let face: ReaderSettings.Typeface = japanese ? .mincho : .serif
             ZStack {
-                Color(hex: "F4EEDF")
+                paper
                 Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile)
-                VStack(spacing: h * 0.06) {
-                    Text(obi.headline)
-                        .font(Typesetter.swiftUIFont(japanese ? .mincho : .serif, size: h * 0.30, bold: true))
-                    Text(obi.detail)
-                        .font(Typesetter.swiftUIFont(japanese ? .mincho : .serif, size: h * 0.13))
-                        .tracking(h * 0.01)
+                    .blendMode(obi.finished ? .multiply : .normal)
+                    .opacity(obi.finished ? 0.6 : 1)
+                VStack(spacing: 0) {
+                    rule(h: h, heavyFirst: true)
+                    Spacer()
+                    rule(h: h, heavyFirst: false)
                 }
-                .foregroundStyle(Color(hex: "7A2E26"))
+                .padding(.vertical, h * 0.08)
+                VStack(spacing: h * 0.05) {
+                    headline(size: h * 0.27, face: face)
+                    Text(obi.detail)
+                        .font(Typesetter.swiftUIFont(face, size: h * 0.115))
+                        .tracking(h * 0.012)
+                        .foregroundStyle(ink.opacity(obi.finished ? 0.9 : 0.7))
+                    if let fraction = obi.fraction {
+                        meter(fraction, width: w * 0.34, height: max(1, h * 0.022))
+                    }
+                }
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
-                .padding(.horizontal, geo.size.width * 0.08)
+                .padding(.horizontal, w * 0.08)
+                .padding(.vertical, h * 0.16)
+                // The big numerals carry their own headroom; lift the block to sit centred.
+                .offset(y: -h * 0.035)
+                // Where the band turns round the spine to the back.
+                LinearGradient(colors: [.black.opacity(0.2), .clear],
+                               startPoint: spineOnRight ? .trailing : .leading, endPoint: spineOnRight ? .leading : .trailing)
+                    .frame(width: w * 0.07)
+                    .frame(maxWidth: .infinity, alignment: spineOnRight ? .trailing : .leading)
             }
             // The band sits on the cover: a shadow above, its own fold line below the top edge.
             .overlay(alignment: .top) { Rectangle().fill(.black.opacity(0.08)).frame(height: max(0.5, h * 0.012)) }
@@ -64,6 +111,34 @@ struct ObiView: View {
         }
         .accessibilityElement()
         .accessibilityLabel("\(obi.headline), \(obi.detail)")
+    }
+
+    /// Bold, with any number in it bigger and in the accent colour.
+    private func headline(size: CGFloat, face: ReaderSettings.Typeface) -> Text {
+        Obi.runs(obi.headline).reduce(Text(verbatim: "")) { text, run in
+            let part = Text(verbatim: run.text)
+                .font(Typesetter.swiftUIFont(face, size: run.number ? size * 1.4 : size, bold: true))
+                .foregroundColor(run.number ? accent : ink)
+            return Text("\(text)\(part)")
+        }
+    }
+
+    /// A printed double rule: a heavy line and a hairline, the heavy one outermost.
+    private func rule(h: CGFloat, heavyFirst: Bool) -> some View {
+        VStack(spacing: h * 0.025) {
+            Rectangle().fill(accent).frame(height: max(1, h * (heavyFirst ? 0.022 : 0.008)))
+            Rectangle().fill(accent).frame(height: max(0.5, h * (heavyFirst ? 0.008 : 0.022)))
+        }
+        .opacity(obi.finished ? 0.75 : 0.85)
+    }
+
+    /// How far through, as a hairline filling from the spine.
+    private func meter(_ fraction: Double, width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: spineOnRight ? .trailing : .leading) {
+            Capsule().fill(ink.opacity(0.15))
+            Capsule().fill(accent).frame(width: width * min(max(fraction, 0), 1))
+        }
+        .frame(width: width, height: height)
     }
 }
 

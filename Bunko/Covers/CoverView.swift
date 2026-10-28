@@ -17,7 +17,7 @@ struct CoverView: View {
             .overlay(alignment: .bottom) {
                 if let obi {
                     GeometryReader { geo in
-                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"))
+                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"), spineOnRight: book.rightToLeft)
                             .frame(height: geo.size.height * (large ? 0.22 : 0.27))
                             .frame(maxHeight: .infinity, alignment: .bottom)
                     }

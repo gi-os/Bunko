@@ -38,7 +38,7 @@ struct ObiTests {
         var p = ReadingProgress(offset: 0, ribbon: 0, fraction: 1)
         p.startedAt = date(20)
         p.finishedAt = date(28)
-        #expect(Obi.finished(p, japanese: true, calendar: calendar) == Obi(headline: "読了", detail: "2026.10.28・9日間"))
+        #expect(Obi.finished(p, japanese: true, calendar: calendar) == Obi(headline: "読了", detail: "2026.10.28・9日間", finished: true))
         #expect(Obi.finished(p, japanese: false, calendar: calendar)?.detail == "2026.10.28 · in 9 days")
         p.startedAt = date(28, hour: 9)
         #expect(Obi.finished(p, japanese: false, calendar: calendar)?.detail == "2026.10.28 · in a day")
@@ -50,8 +50,16 @@ struct ObiTests {
         #expect(Obi.closed(p, japanese: true, now: date(28), calendar: calendar) == nil)
         p.recordTurn(pages: 34, now: date(28), calendar: calendar)
         p.fraction = 0.42
-        #expect(Obi.closed(p, japanese: true, now: date(28), calendar: calendar) == Obi(headline: "今日 34ページ", detail: "全体の42%"))
-        #expect(Obi.closed(p, japanese: false, now: date(29), calendar: calendar) == Obi(headline: "Pick up where you left off", detail: "42% through"))
+        #expect(Obi.closed(p, japanese: true, now: date(28), calendar: calendar) == Obi(headline: "今日 34ページ", detail: "全体の42%", fraction: 0.42))
+        #expect(Obi.closed(p, japanese: false, now: date(29), calendar: calendar) == Obi(headline: "Pick up where you left off", detail: "42% through", fraction: 0.42))
+    }
+
+    @Test func obiSetsTheNumberApart() {
+        #expect(Obi.runs("今日 34ページ").map(\.text) == ["今日 ", "34", "ページ"])
+        #expect(Obi.runs("今日 34ページ").map(\.number) == [false, true, false])
+        #expect(Obi.runs("1 page today").map(\.text) == ["1", " page today"])
+        #expect(Obi.runs("読了").map(\.number) == [false])
+        #expect(Obi.runs("十日").map(\.number) == [false])
     }
 
     @Test func olderProgressStillDecodes() throws {
