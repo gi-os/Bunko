@@ -13,23 +13,32 @@ struct ShelfView: View {
     @State private var problem: String?
     @State private var routed = false
     @State private var opener = Opener.shared
+    /// Spines out, as on a real shelf, or covers face out.
+    @AppStorage("bunko.shelf.spines") private var spines = false
 
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 150), spacing: 20, alignment: .bottom)]
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 30) {
-                    ForEach(ShelfOrder.arrange(library.books)) { book in
-                        ShelfBook(book: book, cover: sync.cover(for: book), original: library.originalCover(for: book),
-                                  progress: sync.progress(for: book), ribbon: Color(hex: sync.settings.ribbonColor))
-                            .animation(.easeInOut(duration: 0.3), value: sync.cover(for: book))
-                            .onTapGesture { open(book) }
-                            .contextMenu { menu(for: book) }
+            Group {
+                if spines {
+                    SpineShelfView(books: ShelfOrder.arrange(library.books), spine: spine(for:), open: { open($0) },
+                                   menu: { AnyView(menu(for: $0)) })
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 30) {
+                            ForEach(ShelfOrder.arrange(library.books)) { book in
+                                ShelfBook(book: book, cover: sync.cover(for: book), original: library.originalCover(for: book),
+                                          progress: sync.progress(for: book), ribbon: Color(hex: sync.settings.ribbonColor))
+                                    .animation(.easeInOut(duration: 0.3), value: sync.cover(for: book))
+                                    .onTapGesture { open(book) }
+                                    .contextMenu { menu(for: book) }
+                            }
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 18)
                     }
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 18)
             }
             .background(ShelfBackground())
             .overlay {
@@ -51,9 +60,13 @@ struct ShelfView: View {
                     Button { importing = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add books")
                 }
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     Button { showsSettings = true } label: { Image(systemName: "textformat.size") }
                         .accessibilityLabel("Settings")
+                    Button { withAnimation(.easeInOut(duration: 0.3)) { spines.toggle() } } label: {
+                        Image(systemName: spines ? "square.grid.2x2" : "books.vertical")
+                    }
+                    .accessibilityLabel(spines ? "Show covers" : "Show spines")
                 }
             }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.epub, .plainText], allowsMultipleSelection: true) { result in
@@ -94,6 +107,15 @@ struct ShelfView: View {
         open(book)
     }
 
+    /// A book's spine, as thick as its file suggests.
+    private func spine(for book: Book) -> BookSpine {
+        let bytes = (try? FileManager.default.attributesOfItem(atPath: library.fileURL(for: book).path)[.size] as? Int) ?? 0
+        let japanese = Book.languageCode(book.language) == "ja"
+        let characters = SpineShelf.characters(bytes: bytes, format: book.format, japanese: japanese)
+        return BookSpine(book: book, style: sync.cover(for: book), original: library.originalCover(for: book),
+                         width: SpineShelf.width(characters: characters, japanese: japanese, id: book.id))
+    }
+
     /// A book opens on its cover, the way you pick one up.
     private func open(_ book: Book, closed: Bool = true) {
         reading = ReaderModel(book: book, library: library, sync: sync, startClosed: closed)
@@ -120,7 +142,16 @@ struct ShelfView: View {
     private func routeForScreenshots() {
         guard !routed, let screen = UserDefaults.standard.string(forKey: "gios-screen") else { return }
         routed = true
-        if screen == "shelf" { seedSeriesForScreenshots() }
+        if screen == "shelf" || screen == "spines" { seedSeriesForScreenshots() }
+        spines = screen == "spines"
+        // On the spine shelf, the series stands in its publisher's house dress, one design for all.
+        if spines {
+            for book in library.books where book.volume != nil {
+                var style = sync.cover(for: book)
+                style.wrapped = false
+                sync.setCover(style, for: book)
+            }
+        }
         seedReadingForScreenshots()
         dressForScreenshots()
         let japanese = library.books.first { $0.rightToLeft && $0.volume == nil } ?? library.books.first

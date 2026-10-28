@@ -111,3 +111,19 @@ struct VolumeLevelTests {
         #expect(!VolumeLevel.isPress(resting: 0.5, now: 0.5))
     }
 }
+
+struct SpineShelfTests {
+    @Test func spinesFillAShelfThenStartTheNext() {
+        #expect(SpineShelf.rows(widths: [30, 30, 30, 30], available: 95, spacing: 2) == [[0, 1, 2], [3]])
+        #expect(SpineShelf.rows(widths: [], available: 95, spacing: 2).isEmpty)
+        #expect(SpineShelf.rows(widths: [200], available: 95, spacing: 2) == [[0]])
+    }
+
+    @Test func thickerBooksStandWider() {
+        let thin = SpineShelf.width(characters: 30_000, japanese: false, id: "a")
+        let thick = SpineShelf.width(characters: 900_000, japanese: false, id: "a")
+        #expect(thick > thin)
+        #expect(SpineShelf.width(characters: 0, japanese: true, id: "x") >= 24)
+        #expect(SpineShelf.width(characters: 50_000_000, japanese: true, id: "x") <= 58)
+    }
+}
