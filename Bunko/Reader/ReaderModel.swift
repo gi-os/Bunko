@@ -23,6 +23,8 @@ final class ReaderModel {
 
     private(set) var currentPage = 0
     private(set) var ribbonOffset = 0
+    /// Whether the ribbon is in the book: none until you lay it in.
+    private(set) var hasRibbon = false
     /// Position plus reading history (started, finished, pages today); what the obi and the wear show.
     private(set) var progress: ReadingProgress
     var jump: Jump?
@@ -48,10 +50,13 @@ final class ReaderModel {
         progress = saved ?? ReadingProgress(offset: 0, ribbon: 0, fraction: 0)
         anchorOffset = progress.offset
         ribbonOffset = progress.ribbon
+        hasRibbon = progress.hasRibbon
     }
 
     var currentOffset: Int { pages.indices.contains(currentPage) ? pages[currentPage].location : anchorOffset }
     var ribbonPage: Int { Paginator.page(containing: ribbonOffset, in: pages) }
+    /// The ribbon lies in what's on the screen now (either page of a spread).
+    var ribbonIsHere: Bool { layout.spreadIndex(ofPage: ribbonPage) == layout.spreadIndex(ofPage: currentPage) }
     var fraction: Double { layout.pageCount <= 1 ? 0 : Double(currentPage) / Double(layout.pageCount - 1) }
 
     /// Cuts the book into pages for this screen and these settings. Called again on any change;
@@ -154,36 +159,45 @@ final class ReaderModel {
 
     func go(toOffset offset: Int) { go(to: Paginator.page(containing: offset, in: pages)) }
 
-    /// A tug on the ribbon: back to where it lies.
-    func followRibbon() {
-        if settings.haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-        go(to: ribbonPage)
-    }
-
-    /// Holding the ribbon lays it in the current page.
-    func moveRibbonHere() {
+    /// A tap on the gutter lays the ribbon in this page.
+    func layRibbonHere() {
+        hasRibbon = true
         ribbonOffset = currentOffset
         if settings.haptics { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         save()
     }
 
-    /// Shutting the book lays the ribbon where you stopped.
+    /// A tap on the ribbon: here, it comes out of the book; elsewhere, back to where it lies.
+    func tapRibbon() {
+        if ribbonIsHere {
+            hasRibbon = false
+            if settings.haptics { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+            save()
+        } else {
+            if settings.haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+            go(to: ribbonPage)
+        }
+    }
+
+    /// Holding the ribbon lays it in the current page.
+    func moveRibbonHere() { layRibbonHere() }
+
     func close() {
-        ribbonOffset = currentOffset
         squeeze = 1
         isClosed = true
         save()
     }
 
+    /// The book opens where you stopped; the ribbon stays where you laid it.
     func open() {
         isClosed = false
-        if pages.indices.contains(ribbonPage), ribbonPage != currentPage { go(to: ribbonPage) }
     }
 
     private func save() {
         guard !pages.isEmpty else { return }
         progress.offset = currentOffset
         progress.ribbon = ribbonOffset
+        progress.hasRibbon = hasRibbon
         progress.fraction = fraction
         if layout.showsLastPage(atPage: currentPage), progress.finishedAt == nil, progress.pagesRead > 0 { progress.finishedAt = .now }
         sync.setProgress(progress, for: book)

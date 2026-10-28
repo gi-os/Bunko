@@ -8,8 +8,8 @@ struct BunkoWidgets: WidgetBundle {
     }
 }
 
-/// The book you're reading, in its cover as it looks now, the ribbon's tail out of its foot. Tap
-/// it and the book opens on its cover. The app draws the cover and writes it to the App Group
+/// The book you're reading, in its cover as it looks now, with its depth. Tap it and the book
+/// opens on its cover. The app draws the cover and writes it to the App Group
 /// (CurrentBook) when it goes to the background, and asks for a reload then.
 struct CurrentBookWidget: Widget {
     var body: some WidgetConfiguration {
