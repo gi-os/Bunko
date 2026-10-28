@@ -72,7 +72,8 @@ struct ShelfView: View {
                 Text(problem ?? "")
             }
             .sheet(item: $dressing) { book in
-                CoverEditorView(book: book, style: sync.cover(for: book))
+                CoverEditorView(book: book, style: sync.cover(for: book),
+                                opensAtObi: UserDefaults.standard.string(forKey: "gios-screen") == "obi")
             }
             .sheet(isPresented: $showsSettings) { SettingsView() }
             .sheet(isPresented: $showsShops) { NavigationStack { ShopsView() } }
@@ -126,6 +127,7 @@ struct ShelfView: View {
         case "reader": if let japanese { open(japanese, closed: false) }
         case "closed": if let japanese { open(japanese, closed: true) }
         case "cover": dressing = japanese
+        case "obi": dressing = japanese
         case "settings": showsSettings = true
         case "shops": showsShops = true
         default: break
