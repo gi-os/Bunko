@@ -96,7 +96,9 @@ struct BookSpine: View {
         let h = Self.height
         ZStack {
             face(w: width, h: h)
-            Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile).blendMode(.multiply).opacity(0.45)
+                .blur(radius: 0.25)
+                .overlay(Image(uiImage: Print.mottle).resizable(resizingMode: .tile).blendMode(.screen).opacity(0.45))
+                .overlay(paperGrain(style.wrapped ? style.paper.grain : .tooth).blendMode(.softLight).opacity(0.85))
             // A paperback's spine is rounded: shadowed at both edges, catching the light a third across.
             LinearGradient(stops: [.init(color: .black.opacity(0.30), location: 0),
                                    .init(color: .white.opacity(0.12), location: 0.32),
@@ -115,7 +117,7 @@ struct BookSpine: View {
     @ViewBuilder private func face(w: CGFloat, h: CGFloat) -> some View {
         if style.wrapped {
             // The bookshop's paper, with a slip for the title as the front has.
-            let paper = Color(hex: style.baseHex), paperInk = Color(hex: style.paper.ink)
+            let paperInk = Color(hex: style.paper.ink)
             VStack(spacing: 0) {
                 SpineText(book.title, vertical: japanese, size: w * 0.5, bold: true, colour: paperInk)
                     .padding(.vertical, 6).frame(width: w * 0.66, height: h * 0.62)
@@ -124,7 +126,7 @@ struct BookSpine: View {
                 Spacer()
             }
             .frame(width: w, height: h)
-            .background(paper)
+            .background { wrapper }
         } else if let original {
             let tone = Self.tone(of: original)
             VStack(spacing: h * 0.04) {
@@ -178,17 +180,8 @@ struct BookSpine: View {
             .frame(width: w, height: h).background(cream)
         case .chidori:
             VStack(spacing: gap) {
-                Canvas { ctx, size in
-                    var y: CGFloat = -size.width
-                    while y < size.height {
-                        var line = Path()
-                        line.move(to: CGPoint(x: 0, y: y + size.width))
-                        line.addLine(to: CGPoint(x: size.width, y: y))
-                        ctx.stroke(line, with: .color(colour), lineWidth: 2.4)
-                        y += 6
-                    }
-                }
-                .frame(height: h * 0.08)
+                // 矢絣, as the cover prints it.
+                ArrowFeathers(column: w / 3).fill(colour).frame(height: h * 0.1).clipped()
                 SpineText(book.title, vertical: japanese, size: w * 0.48, bold: true, colour: ink).frame(maxHeight: .infinity)
                 author(colour, false)
                 shelfCode(colour)
@@ -219,16 +212,41 @@ struct BookSpine: View {
         .overlay(RoundedRectangle(cornerRadius: 2).stroke(colour, lineWidth: 0.5))
     }
 
-    /// The house's mark and name at the foot.
+    /// The house's colophon, its kanji printed in a ring, and its name, as the covers carry them.
     private func foot(_ colour: Color) -> some View {
         VStack(spacing: 2) {
-            Image(systemName: house.imprint.mark).font(.system(size: 7))
-            SpineText(house.imprint.name, vertical: true, size: 6.5, bold: false, colour: colour, gothic: true)
+            Text(house.imprint.colophon)
+                .font(Typesetter.swiftUIFont(.mincho, size: 6.5, bold: true))
+                .frame(width: 11, height: 11)
+                .overlay(Circle().stroke(colour, lineWidth: 0.6))
+            SpineText(house.imprint.name, vertical: true, size: 6.5, bold: true, colour: colour)
                 .frame(height: 29)
         }
         .foregroundStyle(colour)
         .padding(.bottom, 5)
     }
+
+    /// The bookshop's paper: kraft is the scan of the real thing, the rest their colour.
+    @ViewBuilder private var wrapper: some View {
+        if style.paper == .kraft && style.tint == nil {
+            Canvas { ctx, size in
+                ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .tiledImage(Image(uiImage: Print.kraft), scale: coverScale))
+            }
+        } else {
+            Color(hex: style.baseHex)
+        }
+    }
+
+    /// The scanned grain at the scale it has on this book's cover, so spine and cover are one paper.
+    private func paperGrain(_ grain: Print.Grain) -> some View {
+        Canvas { ctx, size in
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .tiledImage(Image(uiImage: grain.image), scale: coverScale))
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var coverScale: CGFloat { Print.tileScale(coverWidth: Self.height * 105 / 148) }
 
     /// The cover art's average colour for the spine, and ink that reads on it.
     static func tone(of image: UIImage) -> (background: Color, text: Color) {
