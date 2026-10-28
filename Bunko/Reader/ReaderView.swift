@@ -94,9 +94,10 @@ struct RibbonView: View {
     }
 }
 
-/// The shut book: its paper cover fills the screen, the ribbon's tail out of the bottom, the obi
-/// round its foot. Tap (or spread two fingers) and the cover swings open on its spine; swipe it
-/// away to put it back on the shelf.
+/// The shut book: its paper cover fills the screen but for the page block showing past its
+/// fore-edge and foot, the ribbon's tail out of the bottom, the obi round its foot. Tap (or
+/// spread two fingers) and the cover board swings open on its spine, the block staying put;
+/// swipe the book away to put it back on the shelf.
 struct ClosedBookView: View {
     let model: ReaderModel
     let cover: CoverStyle
@@ -109,13 +110,30 @@ struct ClosedBookView: View {
 
     private var japanese: Bool { model.book.rightToLeft || model.book.language.hasPrefix("ja") }
 
+    /// How much of the page block shows past the cover, in points.
+    private let depth: CGFloat = 10
+
     var body: some View {
         GeometryReader { geo in
+            let spineOnRight = model.book.rightToLeft
             ZStack(alignment: .bottom) {
+                PageBlock(spineOnRight: spineOnRight, depth: depth)
                 CoverView(style: cover, book: model.book, original: original, large: true,
                           wear: model.progress.wear, obi: Obi.closed(model.progress, japanese: japanese))
+                    // The board's own edge, catching the light at the fore-edge as it swings.
+                    .overlay(alignment: spineOnRight ? .leading : .trailing) {
+                        LinearGradient(colors: [.black.opacity(0.28), .black.opacity(0.06)],
+                                       startPoint: spineOnRight ? .leading : .trailing, endPoint: spineOnRight ? .trailing : .leading)
+                            .frame(width: 3)
+                    }
+                    .padding(spineOnRight ? .leading : .trailing, depth)
+                    .padding(.bottom, depth)
+                    // Opening: the cover turns on the spine (the right edge for a Japanese book).
+                    .rotation3DEffect(.degrees(swing * (spineOnRight ? 100 : -100)), axis: (x: 0, y: 1, z: 0),
+                                      anchor: spineOnRight ? .trailing : .leading, perspective: 0.45)
+                // The ribbon belongs to the pages: it stays as the cover swings away.
                 RibbonView(color: Color(hex: model.settings.ribbonColor), height: 70)
-                    .offset(x: model.book.rightToLeft ? geo.size.width * 0.3 : -geo.size.width * 0.3, y: 40)
+                    .offset(x: spineOnRight ? geo.size.width * 0.3 : -geo.size.width * 0.3, y: 40)
                 if showsHint {
                     Text("Tap to open · Swipe away to put it back")
                         .font(.caption)
@@ -125,9 +143,6 @@ struct ClosedBookView: View {
                         .transition(.opacity)
                 }
             }
-            // Opening: the cover turns on the spine (the right edge for a Japanese book).
-            .rotation3DEffect(.degrees(swing * (model.book.rightToLeft ? 100 : -100)), axis: (x: 0, y: 1, z: 0),
-                              anchor: model.book.rightToLeft ? .trailing : .leading, perspective: 0.45)
             .shadow(color: .black.opacity(drag == .zero && swing == 0 ? 0 : 0.35), radius: 24)
             .rotationEffect(.degrees(Double(drag.width) / 30))
             .offset(drag)

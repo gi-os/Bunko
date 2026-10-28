@@ -62,7 +62,8 @@ struct CurrentBookWidgetView: View {
 }
 
 /// A closed book seen from the front, in a bunko's 105:148, rounder at the fore-edge than the
-/// spine, the ribbon's tail hanging out of its foot near the spine.
+/// spine, its page block showing past the fore-edge and foot, the ribbon's tail hanging out of
+/// its foot near the spine.
 struct BookFace: View {
     let cover: UIImage
     let rightToLeft: Bool
@@ -75,6 +76,7 @@ struct BookFace: View {
             .clipShape(UnevenRoundedRectangle(cornerRadii: .init(
                 topLeading: rightToLeft ? 3 : 1, bottomLeading: rightToLeft ? 3 : 1,
                 bottomTrailing: rightToLeft ? 1 : 3, topTrailing: rightToLeft ? 1 : 3)))
+            .bookDepth(spineOnRight: rightToLeft, depth: 3)
             .background {
                 GeometryReader { geo in
                     RibbonShape()

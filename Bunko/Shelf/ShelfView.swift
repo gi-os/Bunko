@@ -185,13 +185,14 @@ struct ShelfBook: View {
                 .clipShape(UnevenRoundedRectangle(cornerRadii: .init(
                     topLeading: book.rightToLeft ? 3 : 1, bottomLeading: book.rightToLeft ? 3 : 1,
                     bottomTrailing: book.rightToLeft ? 1 : 3, topTrailing: book.rightToLeft ? 1 : 3)))
+                .bookDepth(spineOnRight: book.rightToLeft, depth: 5)
                 .shadow(color: .black.opacity(0.28), radius: 6, x: 0, y: 5)
                 // Behind the book, so the ribbon's tail hangs out from under it rather than across the obi.
                 .background(alignment: book.rightToLeft ? .bottomLeading : .bottomTrailing) {
                     if let progress, progress.fraction > 0 {
                         RibbonView(color: ribbon, height: 26)
                             .frame(width: 8)
-                            .offset(x: book.rightToLeft ? 22 : -22, y: 18)
+                            .offset(x: book.rightToLeft ? 22 : -22, y: 22)
                             .allowsHitTesting(false)
                     }
                 }
