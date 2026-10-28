@@ -102,7 +102,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Ribbon")
                 } footer: {
-                    Text("Tap the ribbon to go back to it; hold it to move it to the page you're on. Closing the book lays it where you stopped.")
+                    Text("Tap the gutter by the spine to lay the ribbon in the page you're on, and tap it there to take it out. From another page, tap it to go back to it; hold it to move it to where you are.")
                 }
 
                 Section {

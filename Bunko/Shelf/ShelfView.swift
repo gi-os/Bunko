@@ -29,7 +29,7 @@ struct ShelfView: View {
                         LazyVGrid(columns: columns, spacing: 30) {
                             ForEach(ShelfOrder.arrange(library.books)) { book in
                                 ShelfBook(book: book, cover: sync.cover(for: book), original: library.originalCover(for: book),
-                                          progress: sync.progress(for: book), ribbon: Color(hex: sync.settings.ribbonColor))
+                                          progress: sync.progress(for: book))
                                     .animation(.easeInOut(duration: 0.3), value: sync.cover(for: book))
                                     .onTapGesture { open(book) }
                                     .contextMenu { menu(for: book) }
@@ -211,13 +211,12 @@ extension ReaderModel: Identifiable {
     nonisolated var id: ObjectIdentifier { ObjectIdentifier(self) }
 }
 
-/// One book standing on the shelf: its cover, a shadow, and the ribbon's tail once it's started.
+/// One book standing on the shelf: its cover, its depth, a shadow, and how far in you are.
 struct ShelfBook: View {
     let book: Book
     let cover: CoverStyle
     let original: UIImage?
     let progress: ReadingProgress?
-    let ribbon: Color
 
     var body: some View {
         VStack(spacing: 8) {
@@ -230,15 +229,6 @@ struct ShelfBook: View {
                     bottomTrailing: book.rightToLeft ? 1 : 3, topTrailing: book.rightToLeft ? 1 : 3)))
                 .bookDepth(spineOnRight: book.rightToLeft, depth: 5)
                 .shadow(color: .black.opacity(0.28), radius: 6, x: 0, y: 5)
-                // Behind the book, so the ribbon's tail hangs out from under it rather than across the obi.
-                .background(alignment: book.rightToLeft ? .bottomLeading : .bottomTrailing) {
-                    if let progress, progress.fraction > 0 {
-                        RibbonView(color: ribbon, height: 26)
-                            .frame(width: 8)
-                            .offset(x: book.rightToLeft ? 22 : -22, y: 22)
-                            .allowsHitTesting(false)
-                    }
-                }
             if let progress, progress.fraction > 0 {
                 Text("\(Int(progress.fraction * 100))%")
                     .font(.caption2.monospacedDigit())
