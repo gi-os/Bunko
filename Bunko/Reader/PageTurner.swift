@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 import UIKit
 
@@ -17,8 +18,7 @@ struct PageTurner: UIViewControllerRepresentable {
         let layout = model.layout
         var options: [UIPageViewController.OptionsKey: Any] = [:]
         if curl {
-            // A right-bound single page is mirrored (see mirrorsCurl), so its spine is .min too.
-            let spine: UIPageViewController.SpineLocation = layout.spread ? .mid : .min
+            let spine: UIPageViewController.SpineLocation = layout.spread ? .mid : (layout.bindingOnRight ? .max : .min)
             options[.spineLocation] = NSNumber(value: spine.rawValue)
         } else {
             options[.interPageSpacing] = 0
@@ -26,7 +26,6 @@ struct PageTurner: UIViewControllerRepresentable {
         let pager = UIPageViewController(transitionStyle: curl ? .pageCurl : .scroll,
                                          navigationOrientation: .horizontal, options: options)
         pager.isDoubleSided = curl && layout.spread
-        if curl && layout.mirrorsCurl { pager.view.transform = CGAffineTransform(scaleX: -1, y: 1) }
         pager.dataSource = context.coordinator
         pager.delegate = context.coordinator
         pager.view.backgroundColor = model.settings.paper.color
@@ -40,7 +39,12 @@ struct PageTurner: UIViewControllerRepresentable {
 
         context.coordinator.pager = pager
         context.coordinator.show(page: model.currentPage)
+        context.coordinator.watchVolumeButtons()
         return pager
+    }
+
+    static func dismantleUIViewController(_ pager: UIPageViewController, coordinator: Coordinator) {
+        coordinator.volume.stop()
     }
 
     func updateUIViewController(_ pager: UIPageViewController, context: Context) {
@@ -52,8 +56,10 @@ struct PageTurner: UIViewControllerRepresentable {
         let model: ReaderModel
         let curl: Bool
         weak var pager: UIPageViewController?
+        let volume = VolumeButtons()
         private var shownVersion = -1
         private var lastJump: UUID?
+        private var turning = false
 
         init(model: ReaderModel, curl: Bool) {
             self.model = model
@@ -66,10 +72,10 @@ struct PageTurner: UIViewControllerRepresentable {
         /// a whole spread.
         private var unitCount: Int { curl ? layout.paddedPageCount : layout.spreadCount }
 
-        /// Going right to left, UIKit's "next" is the book's previous page, except for a single
-        /// curling page bound on the right, whose mirroring already turns it the Japanese way.
-        private var reversed: Bool { layout.rightToLeft && (layout.spread || !curl) }
-        private var mirrored: Bool { curl && layout.mirrorsCurl }
+        /// UIKit's "next" is always the page you reach swiping right to left. Going right to left,
+        /// that's the book's previous page, so a Japanese book swipes left to right to go on (and
+        /// a tap on the left edge turns forward), its leaf turning over onto the spine on the right.
+        private var reversed: Bool { layout.rightToLeft }
 
         func controller(unit: Int) -> UnitController? {
             guard unit >= 0, unit < unitCount else { return nil }
@@ -81,7 +87,7 @@ struct PageTurner: UIViewControllerRepresentable {
                 } else {
                     side = .single
                 }
-                return UnitController(unit: unit, pages: [(unit, side)], model: model, mirrored: mirrored)
+                return UnitController(unit: unit, pages: [(unit, side)], model: model)
             }
             let screen = layout.pages(inSpread: unit)
             let sides: [PageRender.Side] = screen.count == 2 ? [.left, .right] : [.single]
@@ -131,6 +137,37 @@ struct PageTurner: UIViewControllerRepresentable {
             // The page edges show how far in you are: redraw the leaves now facing up.
             for case let unitController as UnitController in pager.viewControllers ?? [] {
                 unitController.refresh(with: model)
+            }
+        }
+
+        /// The volume buttons turn pages only while the book lies open: not shut, not under the
+        /// settings sheet, and not when they've been turned off.
+        func watchVolumeButtons() {
+            volume.onPress = { [weak self] in self?.turnForward() }
+            let wanted = withObservationTracking {
+                model.settings.volumeTurnsPages && !model.isClosed && !model.showsSettings
+            } onChange: { [weak self] in
+                Task { @MainActor in self?.watchVolumeButtons() }
+            }
+            if wanted, let view = pager?.view { volume.start(in: view) } else { volume.stop() }
+        }
+
+        /// The next page (or spread), turned the way a swipe would turn it.
+        func turnForward() {
+            guard let pager, !turning, !model.isClosed, layout.pageCount > 0 else { return }
+            let spread = layout.spreadIndex(ofPage: model.currentPage) + 1
+            guard spread < layout.spreadCount, let page = layout.pages(inSpread: spread).filter({ $0 < layout.pageCount }).min() else { return }
+            let units = curl ? layout.pages(inSpread: spread) : [spread]
+            let controllers = units.compactMap { controller(unit: $0) }
+            guard !controllers.isEmpty else { return }
+            turning = true
+            pager.setViewControllers(controllers, direction: reversed ? .reverse : .forward, animated: true) { [weak self] _ in
+                guard let self else { return }
+                turning = false
+                model.turned(to: page)
+                for case let unitController as UnitController in pager.viewControllers ?? [] {
+                    unitController.refresh(with: model)
+                }
             }
         }
 

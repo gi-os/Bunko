@@ -11,6 +11,8 @@ struct EPUB {
     var series: String?
     var seriesIndex: Double?
     var rightToLeft: Bool
+    /// The spine says which way its pages go (rtl or ltr); otherwise the language decides.
+    var declaresDirection: Bool
     var chapterPaths: [String]
     var coverPath: String?
     private let zip: ZipArchive
@@ -45,7 +47,9 @@ struct EPUB {
         }
         let spine = package.first("spine")
         chapterPaths = (spine?.all("itemref") ?? []).compactMap { ref in ref["idref"].flatMap { manifest[$0]?.href } }
-        rightToLeft = spine?["page-progression-direction"] == "rtl"
+        let progression = spine?["page-progression-direction"]
+        rightToLeft = progression == "rtl"
+        declaresDirection = progression == "rtl" || progression == "ltr"
 
         if let cover = manifest.values.first(where: { $0.properties.split(separator: " ").contains("cover-image") }) {
             coverPath = cover.href

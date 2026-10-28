@@ -124,9 +124,12 @@ struct ShelfView: View {
         seedReadingForScreenshots()
         dressForScreenshots()
         let japanese = library.books.first { $0.rightToLeft && $0.volume == nil } ?? library.books.first
+        let english = library.books.first { !$0.rightToLeft && $0.volume == nil }
         switch screen {
         case "reader": if let japanese { open(japanese, closed: false) }
         case "closed": if let japanese { open(japanese, closed: true) }
+        case "reader-en": if let english { open(english, closed: false) }
+        case "closed-en": if let english { open(english, closed: true) }
         case "cover": dressing = japanese
         case "obi": dressing = japanese
         case "settings": showsSettings = true

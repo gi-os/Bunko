@@ -56,17 +56,17 @@ final class Library {
         if ext == "epub" || (ext != "txt" && data.starts(with: [0x50, 0x4B])) {
             guard let epub = try? EPUB(data: data) else { throw Failure.unreadable(fileName) }
             let title = epub.title.isEmpty ? stem : epub.title
-            let japanese = epub.language.lowercased().hasPrefix("ja")
             let id = Book.stableID(title: title, author: epub.author)
+            let boundOnRight = epub.declaresDirection ? epub.rightToLeft : Book.boundOnRight(language: epub.language)
             book = Book(id: id, title: title, author: epub.author, fileName: "\(id).epub", format: .epub,
-                        language: epub.language, rightToLeft: rightToLeft ?? (epub.rightToLeft || japanese),
+                        language: epub.language, rightToLeft: rightToLeft ?? boundOnRight,
                         addedAt: .now, shopID: shopID, series: epub.series, seriesIndex: epub.seriesIndex)
             cover = epub.coverImageData()
         } else if let text = PlainText.decode(data) {
-            let japanese = Script.looksJapanese(text)
+            let language = Script.language(of: text)
             let id = Book.stableID(title: stem, author: "")
             book = Book(id: id, title: stem, author: "", fileName: "\(id).txt", format: .txt,
-                        language: japanese ? "ja" : "", rightToLeft: rightToLeft ?? japanese,
+                        language: language, rightToLeft: rightToLeft ?? Book.boundOnRight(language: language),
                         addedAt: .now, shopID: shopID)
         } else {
             throw Failure.unreadable(fileName)

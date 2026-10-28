@@ -38,12 +38,6 @@ struct SpreadLayoutTests {
         #expect(!single.showsLastPage(atPage: 8))
         #expect(!SpreadLayout(pageCount: 0, spread: false, rightToLeft: false).showsLastPage(atPage: 0))
     }
-
-    @Test func onlyARightBoundSinglePageCurlsMirrored() {
-        #expect(SpreadLayout(pageCount: 3, spread: false, rightToLeft: true).mirrorsCurl)
-        #expect(!SpreadLayout(pageCount: 3, spread: true, rightToLeft: true).mirrorsCurl)
-        #expect(!SpreadLayout(pageCount: 3, spread: false, rightToLeft: false).mirrorsCurl)
-    }
 }
 
 struct PaginationTests {

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import NaturalLanguage
 
 /// A book on the shelf. The file itself lives in the library folder; everything here is small.
 struct Book: Codable, Identifiable, Hashable {
@@ -13,7 +14,8 @@ struct Book: Codable, Identifiable, Hashable {
     var fileName: String
     var format: Format
     var language: String
-    /// Read right to left (vertical Japanese, or an EPUB that says so).
+    /// Bound on the right and read right to left: vertical Japanese, a right-to-left script
+    /// (Arabic, Hebrew…), or an EPUB that says so.
     var rightToLeft: Bool
     var addedAt: Date
     var shopID: UUID?
@@ -166,7 +168,37 @@ struct ReadingProgress: Codable, Equatable {
     }
 }
 
+extension Book {
+    /// A book goes the way its language does: Japanese is set in columns and bound on the right;
+    /// Arabic, Hebrew, Persian and Urdu run in rows from the right, also bound on the right; the
+    /// rest (English first) run left to right, bound on the left.
+    static func boundOnRight(language: String) -> Bool {
+        languageCode(language) == "ja" || writtenRightToLeft(language)
+    }
+
+    /// Rows that run right to left.
+    static func writtenRightToLeft(_ language: String) -> Bool {
+        ["ar", "he", "iw", "fa", "ur", "yi", "ps", "sd", "ug", "dv", "ckb"].contains(languageCode(language))
+    }
+
+    static func languageCode(_ language: String) -> String {
+        language.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? ""
+    }
+
+    var rowsRightToLeft: Bool { Self.writtenRightToLeft(language) }
+}
+
 enum Script {
+    /// The text's language (BCP 47), from its opening: "ja" for kana and kanji, otherwise what
+    /// the system recognises, or "" when it can't tell.
+    static func language(of text: String) -> String {
+        if looksJapanese(text) { return "ja" }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(text.prefix(3000)))
+        guard let language = recognizer.dominantLanguage, language != .undetermined else { return "" }
+        return language.rawValue
+    }
+
     /// True when kana and kanji make up a good share of the letters at the start of the text.
     static func looksJapanese(_ text: String) -> Bool {
         var cjk = 0, letters = 0
