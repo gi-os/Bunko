@@ -12,6 +12,8 @@ fastlane/test_output/
 # written by xcodegen from project.yml
 Bunko/Info.plist
 Bunko/Bunko.entitlements
+BunkoWidget/Info.plist
+BunkoWidget/BunkoWidget.entitlements
 # the shared kit (gi-os/.github), fetched by CI and by .claude/hooks/session-start.sh
 .gios/
 .claude/skills/gios-*/

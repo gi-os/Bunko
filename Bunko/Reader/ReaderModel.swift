@@ -42,6 +42,7 @@ final class ReaderModel {
         self.library = library
         self.sync = sync
         isClosed = startClosed
+        Opener.setCurrent(book.id)
         let saved = sync.progress(for: book)
         progress = saved ?? ReadingProgress(offset: 0, ribbon: 0, fraction: 0)
         anchorOffset = progress.offset
