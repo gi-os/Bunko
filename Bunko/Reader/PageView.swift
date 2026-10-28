@@ -130,10 +130,13 @@ final class UnitController: UIViewController {
     let unit: Int
     private let pages: [(page: Int, side: PageRender.Side)]
     private let pageViews: [PageView]
+    /// Inside a mirrored page turner (a right-bound single page): drawn mirrored back, to read true.
+    private let mirrored: Bool
 
-    init(unit: Int, pages: [(page: Int, side: PageRender.Side)], model: ReaderModel) {
+    init(unit: Int, pages: [(page: Int, side: PageRender.Side)], model: ReaderModel, mirrored: Bool = false) {
         self.unit = unit
         self.pages = pages
+        self.mirrored = mirrored
         pageViews = pages.map { _ in PageView(frame: .zero) }
         super.init(nibName: nil, bundle: nil)
         refresh(with: model)
@@ -152,6 +155,7 @@ final class UnitController: UIViewController {
         stack.distribution = .fillEqually
         stack.frame = view.bounds
         stack.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        if mirrored { stack.transform = CGAffineTransform(scaleX: -1, y: 1) }
         view.addSubview(stack)
     }
 }

@@ -17,7 +17,8 @@ struct PageTurner: UIViewControllerRepresentable {
         let layout = model.layout
         var options: [UIPageViewController.OptionsKey: Any] = [:]
         if curl {
-            let spine: UIPageViewController.SpineLocation = layout.spread ? .mid : (layout.bindingOnRight ? .max : .min)
+            // A right-bound single page is mirrored (see mirrorsCurl), so its spine is .min too.
+            let spine: UIPageViewController.SpineLocation = layout.spread ? .mid : .min
             options[.spineLocation] = NSNumber(value: spine.rawValue)
         } else {
             options[.interPageSpacing] = 0
@@ -25,6 +26,7 @@ struct PageTurner: UIViewControllerRepresentable {
         let pager = UIPageViewController(transitionStyle: curl ? .pageCurl : .scroll,
                                          navigationOrientation: .horizontal, options: options)
         pager.isDoubleSided = curl && layout.spread
+        if curl && layout.mirrorsCurl { pager.view.transform = CGAffineTransform(scaleX: -1, y: 1) }
         pager.dataSource = context.coordinator
         pager.delegate = context.coordinator
         pager.view.backgroundColor = model.settings.paper.color
@@ -65,8 +67,9 @@ struct PageTurner: UIViewControllerRepresentable {
         private var unitCount: Int { curl ? layout.paddedPageCount : layout.spreadCount }
 
         /// Going right to left, UIKit's "next" is the book's previous page, except for a single
-        /// curling page bound on the right, which UIKit already turns the Japanese way.
+        /// curling page bound on the right, whose mirroring already turns it the Japanese way.
         private var reversed: Bool { layout.rightToLeft && (layout.spread || !curl) }
+        private var mirrored: Bool { curl && layout.mirrorsCurl }
 
         func controller(unit: Int) -> UnitController? {
             guard unit >= 0, unit < unitCount else { return nil }
@@ -78,7 +81,7 @@ struct PageTurner: UIViewControllerRepresentable {
                 } else {
                     side = .single
                 }
-                return UnitController(unit: unit, pages: [(unit, side)], model: model)
+                return UnitController(unit: unit, pages: [(unit, side)], model: model, mirrored: mirrored)
             }
             let screen = layout.pages(inSpread: unit)
             let sides: [PageRender.Side] = screen.count == 2 ? [.left, .right] : [.single]

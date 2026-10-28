@@ -108,6 +108,7 @@ struct ShelfView: View {
     private func routeForScreenshots() {
         guard !routed, let screen = UserDefaults.standard.string(forKey: "gios-screen") else { return }
         routed = true
+        seedReadingForScreenshots()
         let japanese = library.books.first { $0.rightToLeft } ?? library.books.first
         switch screen {
         case "reader": if let japanese { open(japanese, closed: false) }
@@ -116,6 +117,25 @@ struct ShelfView: View {
         case "settings": showsSettings = true
         case "shops": showsShops = true
         default: break
+        }
+    }
+
+    /// Screenshots show books that have been read: the Japanese sample half-way through with some
+    /// pages today (the closed book's obi, a little wear), the other finished (読了 on the shelf).
+    private func seedReadingForScreenshots() {
+        let day: TimeInterval = 86_400
+        for book in library.books where sync.progress(for: book) == nil {
+            var progress = ReadingProgress(offset: 0, ribbon: 0, fraction: book.rightToLeft ? 0.42 : 1)
+            if book.rightToLeft {
+                progress.startedAt = Date.now - 5 * day
+                progress.recordTurn(pages: 34)
+                progress.pagesRead = 260
+            } else {
+                progress.startedAt = Date.now - 9 * day
+                progress.finishedAt = Date.now - day
+                progress.pagesRead = 600
+            }
+            sync.setProgress(progress, for: book)
         }
     }
 }
