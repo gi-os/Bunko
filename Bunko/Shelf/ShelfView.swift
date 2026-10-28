@@ -12,6 +12,7 @@ struct ShelfView: View {
     @State private var showsShops = false
     @State private var problem: String?
     @State private var routed = false
+    @State private var opener = Opener.shared
 
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 150), spacing: 20, alignment: .bottom)]
 
@@ -79,7 +80,17 @@ struct ShelfView: View {
                 ReaderView(model: model)
             }
             .onAppear(perform: routeForScreenshots)
+            .onChange(of: opener.request, initial: true) { _, id in pickUp(id) }
         }
+    }
+
+    /// The widget or "Read instead" asked for a book: pick it up on its cover, unless it's
+    /// already in your hands.
+    private func pickUp(_ id: String?) {
+        guard let id else { return }
+        opener.request = nil
+        guard reading?.book.id != id, let book = library.books.first(where: { $0.id == id }) else { return }
+        open(book)
     }
 
     /// A book opens on its cover, the way you pick one up.
@@ -179,19 +190,5 @@ struct ShelfBook: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(book.title)
         .accessibilityAddTraits(.isButton)
-    }
-}
-
-/// Pale wood, quietly.
-struct ShelfBackground: View {
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        LinearGradient(
-            colors: scheme == .dark
-                ? [Color(hex: "1E1B17"), Color(hex: "16130F")]
-                : [Color(hex: "F2EBDD"), Color(hex: "E6DAC4")],
-            startPoint: .top, endPoint: .bottom)
-        .ignoresSafeArea()
     }
 }

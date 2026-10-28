@@ -94,19 +94,6 @@ struct RibbonView: View {
     }
 }
 
-struct RibbonShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - rect.width * 0.9))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
 /// The shut book: its paper cover fills the screen, the ribbon's tail out of the bottom, the obi
 /// round its foot. Tap (or spread two fingers) and the cover swings open on its spine; swipe it
 /// away to put it back on the shelf.
