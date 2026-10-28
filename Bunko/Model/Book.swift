@@ -33,12 +33,60 @@ struct BookContent: Equatable, Sendable {
     var chapters: [Chapter]
 }
 
-/// Where you are in a book, by character offset so it survives a change of font or screen.
+/// Where you are in a book, by character offset so it survives a change of font or screen, and
+/// what reading it has been like: when you started and finished, and how much you've read (the
+/// cover wears in, the obi shows today's pages).
 struct ReadingProgress: Codable, Equatable {
     var offset: Int
     /// Where the ribbon (スピン) lies: set when the book is closed or by holding the ribbon.
     var ribbon: Int
     var fraction: Double
+    var startedAt: Date?
+    var finishedAt: Date?
+    /// Pages turned forward, ever.
+    var pagesRead = 0
+    /// The day `pagesOnDay` counts (yyyy-M-d, local).
+    var day = ""
+    var pagesOnDay = 0
+
+    init(offset: Int, ribbon: Int, fraction: Double) {
+        self.offset = offset
+        self.ribbon = ribbon
+        self.fraction = fraction
+    }
+
+    /// 0 for a new book, 1 for a well-loved one.
+    var wear: Double { min(1, Double(pagesRead) / 600) }
+
+    func pagesToday(now: Date = .now, calendar: Calendar = .current) -> Int {
+        day == Self.dayKey(now, calendar: calendar) ? pagesOnDay : 0
+    }
+
+    mutating func recordTurn(pages: Int, now: Date = .now, calendar: Calendar = .current) {
+        guard pages > 0 else { return }
+        if startedAt == nil { startedAt = now }
+        let today = Self.dayKey(now, calendar: calendar)
+        if day != today { day = today; pagesOnDay = 0 }
+        pagesOnDay += pages
+        pagesRead += pages
+    }
+
+    static func dayKey(_ date: Date, calendar: Calendar) -> String {
+        let d = calendar.dateComponents([.year, .month, .day], from: date)
+        return "\(d.year ?? 0)-\(d.month ?? 0)-\(d.day ?? 0)"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        offset = (try? c.decodeIfPresent(Int.self, forKey: .offset)) ?? 0
+        ribbon = (try? c.decodeIfPresent(Int.self, forKey: .ribbon)) ?? offset
+        fraction = (try? c.decodeIfPresent(Double.self, forKey: .fraction)) ?? 0
+        startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
+        finishedAt = try? c.decodeIfPresent(Date.self, forKey: .finishedAt)
+        pagesRead = (try? c.decodeIfPresent(Int.self, forKey: .pagesRead)) ?? 0
+        day = (try? c.decodeIfPresent(String.self, forKey: .day)) ?? ""
+        pagesOnDay = (try? c.decodeIfPresent(Int.self, forKey: .pagesOnDay)) ?? 0
+    }
 }
 
 enum Script {

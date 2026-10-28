@@ -39,8 +39,15 @@ struct SettingsView: View {
                 }
 
                 Section("Type") {
-                    Picker("Typeface", selection: settings.typeface) {
-                        ForEach(ReaderSettings.Typeface.allCases) { Text($0.label).tag($0) }
+                    Picker("Japanese", selection: settings.typeface) {
+                        ForEach(ReaderSettings.Typeface.allCases) { face in
+                            Text(face.label).font(Typesetter.swiftUIFont(face, size: 17)).tag(face)
+                        }
+                    }
+                    Picker("Western", selection: settings.westernTypeface) {
+                        ForEach(ReaderSettings.Typeface.allCases) { face in
+                            Text(face.label).font(Typesetter.swiftUIFont(face, size: 17)).tag(face)
+                        }
                     }
                     LabeledContent("Size") {
                         Slider(value: settings.fontSize, in: 12...28, step: 1) { Text("Size") }

@@ -1,4 +1,5 @@
 import CoreText
+import SwiftUI
 import UIKit
 
 /// The whole book as one attributed string, with where each chapter starts.
@@ -15,16 +16,30 @@ struct TypesetBook: @unchecked Sendable {
 }
 
 enum Typesetter {
-    static func font(_ typeface: ReaderSettings.Typeface, size: CGFloat) -> UIFont {
-        let name = switch typeface {
-        case .mincho: "HiraMinProN-W3"
-        case .gothic: "HiraginoSans-W3"
-        case .serif: "IowanOldStyle-Roman"
+    /// The bundled faces (Resources/Fonts, listed in project.yml UIAppFonts), falling back to the
+    /// system's Hiragino. Bold: Shippori's own bold, Literata's variable weight axis.
+    static func font(_ typeface: ReaderSettings.Typeface, size: CGFloat, bold: Bool = false) -> UIFont {
+        let (name, fallback) = switch typeface {
+        case .mincho: (bold ? "ShipporiMincho-Bold" : "ShipporiMincho-Regular", bold ? "HiraMinProN-W6" : "HiraMinProN-W3")
+        case .oldMincho: ("ZenOldMincho-Regular", bold ? "HiraMinProN-W6" : "HiraMinProN-W3")
+        case .gothic: ("ZenKakuGothicNew-Regular", bold ? "HiraginoSans-W6" : "HiraginoSans-W3")
+        case .serif: ("Literata-Regular", bold ? "Georgia-Bold" : "Georgia")
         }
-        return UIFont(name: name, size: size) ?? .systemFont(ofSize: size)
+        guard let font = UIFont(name: name, size: size) else {
+            return UIFont(name: fallback, size: size) ?? .systemFont(ofSize: size, weight: bold ? .semibold : .regular)
+        }
+        guard bold, typeface == .serif else { return font }
+        let weightAxis = 0x7767_6874 // 'wght'
+        let variation = UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String)
+        return UIFont(descriptor: font.fontDescriptor.addingAttributes([variation: [weightAxis: 640]]), size: size)
     }
 
-    static func typeset(_ content: BookContent, settings: ReaderSettings, vertical: Bool) -> TypesetBook {
+    static func swiftUIFont(_ typeface: ReaderSettings.Typeface, size: CGFloat, bold: Bool = false) -> Font {
+        Font(font(typeface, size: size, bold: bold) as CTFont)
+    }
+
+    static func typeset(_ content: BookContent, settings: ReaderSettings, typeface: ReaderSettings.Typeface,
+                        vertical: Bool) -> TypesetBook {
         let size = CGFloat(settings.fontSize)
         let ink = settings.paper.ink
         let body = NSMutableParagraphStyle()
@@ -49,8 +64,8 @@ enum Typesetter {
             if vertical { attrs[NSAttributedString.Key(kCTVerticalFormsAttributeName as String)] = true }
             return attrs
         }
-        let bodyAttrs = attributes(font(settings.typeface, size: size), body)
-        let headingAttrs = attributes(font(settings.typeface, size: size * 1.35), heading)
+        let bodyAttrs = attributes(font(typeface, size: size), body)
+        let headingAttrs = attributes(font(typeface, size: size * 1.3, bold: true), heading)
 
         let text = NSMutableAttributedString()
         var starts: [Int] = []

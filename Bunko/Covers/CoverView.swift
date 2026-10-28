@@ -1,14 +1,32 @@
 import SwiftUI
 
-/// A book as you see it shut: in its paper cover, or (unwrapped) in its own cover.
+/// A book as you see it shut: in its paper cover, or (unwrapped) in its own cover, worn by how
+/// much it has been read, and in its obi when there's something to say.
 struct CoverView: View {
     let style: CoverStyle
     let book: Book
     var original: UIImage?
     /// Full screen (the closed book) rather than a shelf thumbnail: bigger type and stamp.
     var large = false
+    var wear: Double = 0
+    var obi: Obi?
 
     var body: some View {
+        face
+            .overlay { WearOverlay(wear: wear, seed: book.id, spineOnRight: book.rightToLeft) }
+            .overlay(alignment: .bottom) {
+                if let obi {
+                    GeometryReader { geo in
+                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"))
+                            .frame(height: geo.size.height * (large ? 0.22 : 0.27))
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+    }
+
+    @ViewBuilder private var face: some View {
         if style.wrapped {
             PaperCover(style: style, book: book, large: large)
         } else if let original {
@@ -117,19 +135,19 @@ struct PaperCover: View {
             let maxChars = Int((rect.height - fontSize) / (fontSize * 1.08))
             let chars = Array(book.title.prefix(max(1, maxChars)))
             for (i, ch) in chars.enumerated() {
-                ctx.draw(Text(String(ch)).font(.custom("HiraMinProN-W6", size: fontSize)).foregroundColor(inkColor),
+                ctx.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: fontSize, bold: true)).foregroundColor(inkColor),
                          at: CGPoint(x: rect.midX, y: rect.minY + fontSize * 0.9 + CGFloat(i) * fontSize * 1.08))
             }
         } else {
             let rect = CGRect(x: size.width * 0.14, y: size.height * 0.1, width: size.width * 0.72, height: size.height * 0.22)
             ctx.fill(Path(rect), with: .color(paper))
             ctx.stroke(Path(rect.insetBy(dx: 2 * unit, dy: 2 * unit)), with: .color(inkColor.opacity(0.35)), lineWidth: 0.6 * unit)
-            let title = Text(book.title).font(.custom("IowanOldStyle-Bold", size: fontSize)).foregroundColor(inkColor)
+            let title = Text(book.title).font(Typesetter.swiftUIFont(.serif, size: fontSize, bold: true)).foregroundColor(inkColor)
             var resolved = ctx.resolve(title)
             resolved.shading = .color(inkColor)
             ctx.draw(resolved, in: rect.insetBy(dx: 6 * unit, dy: 5 * unit).offsetBy(dx: 0, dy: 0))
             if !book.author.isEmpty {
-                ctx.draw(Text(book.author).font(.custom("IowanOldStyle-Italic", size: fontSize * 0.6)).foregroundColor(inkColor.opacity(0.7)),
+                ctx.draw(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6)).foregroundColor(inkColor.opacity(0.7)),
                          at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
             }
         }
@@ -154,12 +172,37 @@ struct PaperCover: View {
             cat.shading = .color(ink)
             stamp.draw(cat, in: CGRect(x: -diameter * 0.16, y: -diameter * 0.3, width: diameter * 0.32, height: diameter * 0.26))
         }
-        let text = Text(style.stamp.uppercased())
-            .font(.system(size: max(5, diameter * 0.12), weight: .heavy, design: .serif))
-            .tracking(diameter * 0.01)
-            .foregroundColor(ink)
-        stamp.draw(text, in: CGRect(x: -diameter * 0.38, y: style.paper == .basil ? diameter * 0.02 : -diameter * 0.2,
-                                     width: diameter * 0.76, height: diameter * 0.4))
+        // One line, or two split at the space nearest the middle; each shrunk to fit the ring.
+        let lines = Self.stampLines(style.stamp)
+        let lineHeight = diameter * 0.15
+        let centerY = style.paper == .basil ? diameter * 0.16 : 0
+        for (i, line) in lines.enumerated() {
+            let base = diameter * 0.12
+            var text = stamp.resolve(Text(line).font(.system(size: base, weight: .heavy, design: .serif)).tracking(diameter * 0.008))
+            let width = text.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
+            let room = diameter * (lines.count == 1 ? 0.72 : 0.66)
+            if width > room {
+                text = stamp.resolve(Text(line).font(.system(size: base * room / width, weight: .heavy, design: .serif))
+                    .tracking(diameter * 0.008 * room / width))
+            }
+            text.shading = .color(ink)
+            let y = centerY + (CGFloat(i) - CGFloat(lines.count - 1) / 2) * lineHeight
+            stamp.draw(text, at: CGPoint(x: 0, y: y))
+        }
+    }
+
+    static func stampLines(_ stamp: String) -> [String] {
+        let text = stamp.uppercased().trimmingCharacters(in: .whitespaces)
+        guard text.count > 11, text.contains(" ") else { return [text] }
+        if let dot = text.range(of: " · ") {
+            return [String(text[..<dot.lowerBound]), String(text[dot.upperBound...])]
+        }
+        let middle = text.count / 2
+        let spaces = text.indices.filter { text[$0] == " " }
+        let split = spaces.min { abs(text.distance(from: text.startIndex, to: $0) - middle) < abs(text.distance(from: text.startIndex, to: $1) - middle) }!
+        let first = text[..<split].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
+        let second = text[text.index(after: split)...].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
+        return [first, second].filter { !$0.isEmpty }
     }
 }
 
@@ -174,10 +217,10 @@ struct PlainCover: View {
             Color(hue: hue, saturation: 0.35, brightness: 0.45)
             VStack(spacing: large ? 18 : 6) {
                 Text(book.title)
-                    .font(.custom("IowanOldStyle-Bold", size: large ? 34 : 13))
+                    .font(Typesetter.swiftUIFont(.serif, size: large ? 34 : 13, bold: true))
                     .multilineTextAlignment(.center)
                 if !book.author.isEmpty {
-                    Text(book.author).font(.custom("IowanOldStyle-Italic", size: large ? 20 : 9))
+                    Text(book.author).font(.custom("Literata-Italic", size: large ? 20 : 9))
                 }
             }
             .foregroundStyle(.white.opacity(0.9))

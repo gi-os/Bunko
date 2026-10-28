@@ -34,6 +34,14 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # Bundled typefaces (SIL OFL; licences next to the files in Resources/Fonts).
+        UIAppFonts:
+          - ShipporiMincho-Regular.ttf
+          - ShipporiMincho-Bold.ttf
+          - ZenOldMincho-Regular.ttf
+          - ZenKakuGothicNew-Regular.ttf
+          - Literata.ttf
+          - Literata-Italic.ttf
         # Bookshops are often plain-HTTP servers at home (Calibre, Calibre-Web, Kavita on a NAS).
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
