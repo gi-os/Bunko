@@ -20,7 +20,7 @@ struct ShelfView: View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 30) {
-                    ForEach(library.books) { book in
+                    ForEach(ShelfOrder.arrange(library.books)) { book in
                         ShelfBook(book: book, cover: sync.cover(for: book), original: library.originalCover(for: book),
                                   progress: sync.progress(for: book), ribbon: Color(hex: sync.settings.ribbonColor))
                             .animation(.easeInOut(duration: 0.3), value: sync.cover(for: book))
@@ -120,9 +120,10 @@ struct ShelfView: View {
     private func routeForScreenshots() {
         guard !routed, let screen = UserDefaults.standard.string(forKey: "gios-screen") else { return }
         routed = true
+        if screen == "shelf" { seedSeriesForScreenshots() }
         seedReadingForScreenshots()
         dressForScreenshots()
-        let japanese = library.books.first { $0.rightToLeft } ?? library.books.first
+        let japanese = library.books.first { $0.rightToLeft && $0.volume == nil } ?? library.books.first
         switch screen {
         case "reader": if let japanese { open(japanese, closed: false) }
         case "closed": if let japanese { open(japanese, closed: true) }
@@ -138,7 +139,7 @@ struct ShelfView: View {
     /// pages today (the closed book's obi, a little wear), the other finished (読了 on the shelf).
     private func seedReadingForScreenshots() {
         let day: TimeInterval = 86_400
-        for book in library.books where sync.progress(for: book) == nil {
+        for book in library.books where sync.progress(for: book) == nil && book.volume == nil {
             var progress = ReadingProgress(offset: 0, ribbon: 0, fraction: book.rightToLeft ? 0.42 : 1)
             if book.rightToLeft {
                 progress.startedAt = Date.now - 5 * day
@@ -153,10 +154,18 @@ struct ShelfView: View {
         }
     }
 
+    /// The shelf's screenshot has a series, added out of order, standing together in order.
+    private func seedSeriesForScreenshots() {
+        let text = "猫町の通りを歩いていると、どの窓にも猫がいた。"
+        for volume in ["猫町 第2巻", "猫町 第3巻", "猫町 第1巻"] where !library.books.contains(where: { $0.title == volume }) {
+            _ = try? library.add(data: Data(text.utf8), fileName: volume + ".txt")
+        }
+    }
+
     /// Screenshots show the printed papers and the seal on the Japanese sample (waves, a
     /// bookshop's 朱印) and the others out of their paper, in their publisher's house cover.
     private func dressForScreenshots() {
-        for book in library.books {
+        for book in library.books where book.volume == nil {
             var style = CoverStyle(paper: book.rightToLeft ? .seigaiha : .asanoha, stamp: book.rightToLeft ? "文庫堂" : nil)
             if book.rightToLeft { style.stampShape = .seal } else { style.wrapped = false }
             sync.setCover(style, for: book)

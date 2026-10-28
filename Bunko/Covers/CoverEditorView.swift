@@ -7,6 +7,8 @@ struct CoverEditorView: View {
     @Environment(Library.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State private var style: CoverStyle
+    /// Dress every volume of its series alike, and any added later.
+    @State private var wholeSeries = true
     /// Opens at the foot, on the obi (the last section): for the screenshots.
     var opensAtObi = false
 
@@ -36,6 +38,13 @@ struct CoverEditorView: View {
                         .onTapGesture { style.wrapped.toggle() }
 
                     Toggle("Paper cover", isOn: $style.wrapped)
+                    if let volume = book.volume {
+                        Toggle(isOn: $wholeSeries) {
+                            Text("Whole series")
+                            Text(seriesBooks.count > 1 ? "\(volume.series) · all \(seriesBooks.count) books, and any added later"
+                                                       : "\(volume.series) · and any volumes added later")
+                        }
+                    }
 
                     if style.wrapped {
                         papers
@@ -69,12 +78,23 @@ struct CoverEditorView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        sync.setCover(style, for: book)
+                        if book.volume != nil && wholeSeries {
+                            sync.setSeriesCover(style, for: book)
+                            for volume in seriesBooks { sync.setCover(style, for: volume) }
+                        } else {
+                            sync.setCover(style, for: book)
+                        }
                         dismiss()
                     }
                 }
             }
         }
+    }
+
+    /// The volumes on the shelf from this book's series, itself included.
+    private var seriesBooks: [Book] {
+        guard book.volume != nil else { return [book] }
+        return library.books.filter { $0.designKey == book.designKey }
     }
 
     /// Every kind of obi on this book, wearing what it would say now (or a sample).

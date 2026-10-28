@@ -16,7 +16,7 @@ struct CoverView: View {
             .overlay { WearOverlay(wear: wear, seed: book.id, spineOnRight: book.rightToLeft) }
             .overlay(alignment: .bottom) {
                 if let obi {
-                    let kind = style.obi ?? .automatic(for: book.id)
+                    let kind = style.obi ?? .automatic(for: book.designKey)
                     GeometryReader { geo in
                         ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"),
                                 spineOnRight: book.rightToLeft, style: kind, title: book.title)
@@ -70,7 +70,12 @@ struct PaperCover: View {
                 startPoint: CGPoint(x: spineOnRight ? size.width : 0, y: 0),
                 endPoint: CGPoint(x: spineOnRight ? size.width - spineWidth : spineWidth, y: 0)))
 
-            if style.showsLabel { drawLabel(&ctx, size: size, unit: unit) }
+            if style.showsLabel {
+                drawLabel(&ctx, size: size, unit: unit)
+            } else if let number = book.volume?.index {
+                drawVolume(&ctx, number: number, at: CGPoint(x: spineOnRight ? size.width * 0.2 : size.width * 0.8, y: size.height * 0.1),
+                           size: max(9, size.width * 0.075))
+            }
             switch style.stampShape {
             case .none: break
             case .seal: drawSeal(&ctx, size: size, unit: unit)
@@ -196,6 +201,7 @@ struct PaperCover: View {
                 ctx.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: glyph, bold: true)).foregroundColor(inkColor),
                          at: CGPoint(x: rect.maxX - glyph * 0.95 - c * column, y: rect.minY + glyph * 0.9 + row * glyph * 1.08))
             }
+            if let number = book.volume?.index { drawVolume(&ctx, number: number, at: CGPoint(x: rect.maxX, y: rect.maxY), size: fontSize) }
         } else {
             let rect = CGRect(x: size.width * 0.14, y: size.height * 0.1, width: size.width * 0.72, height: size.height * 0.22)
             ctx.fill(Path(rect), with: .color(paper))
@@ -220,6 +226,7 @@ struct PaperCover: View {
                 author.shading = .color(inkColor.opacity(0.7))
                 ctx.draw(author, at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
             }
+            if let number = book.volume?.index { drawVolume(&ctx, number: number, at: CGPoint(x: rect.maxX, y: rect.maxY), size: fontSize) }
         }
     }
 
@@ -249,6 +256,15 @@ struct PaperCover: View {
             }
             size *= 0.92
         }
+    }
+
+    /// A volume's number on a round vermilion sticker, the way a series is told apart on the shelf.
+    private func drawVolume(_ ctx: inout GraphicsContext, number: Double, at centre: CGPoint, size: CGFloat) {
+        let d = size * 1.25
+        ctx.fill(Path(ellipseIn: CGRect(x: centre.x - d / 2, y: centre.y - d / 2, width: d, height: d)), with: .color(Color(hex: "C23A22")))
+        var text = ctx.resolve(Text(Book.Volume.label(number)).font(.system(size: size * 0.72, weight: .heavy, design: .serif)))
+        text.shading = .color(Color(hex: "F7F2E6"))
+        ctx.draw(text, at: centre)
     }
 
     /// A vertical title slip's columns and type size: one column at the usual size if it fits,
