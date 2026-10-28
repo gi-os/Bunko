@@ -9,12 +9,13 @@ struct CoverEditorView: View {
     @State private var style: CoverStyle
     /// Dress every volume of its series alike, and any added later.
     @State private var wholeSeries = true
-    /// Opens at the foot, on the obi (the last section): for the screenshots.
-    var opensAtObi = false
+    /// The sections a screenshot can open on.
+    enum Section: String { case houses, obi }
+    var opensAt: Section?
 
-    init(book: Book, style: CoverStyle, opensAtObi: Bool = false) {
+    init(book: Book, style: CoverStyle, opensAt: Section? = nil) {
         self.book = book
-        self.opensAtObi = opensAtObi
+        self.opensAt = opensAt
         _style = State(initialValue: style)
     }
 
@@ -27,51 +28,58 @@ struct CoverEditorView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    CoverView(style: style, book: book, original: library.originalCover(for: book))
-                        .aspectRatio(105.0 / 148.0, contentMode: .fit)
-                        .frame(height: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 2))
-                        .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
-                        .animation(.easeInOut(duration: 0.3), value: style)
-                        .onTapGesture { style.wrapped.toggle() }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 28) {
+                        CoverView(style: style, book: book, original: library.originalCover(for: book))
+                            .aspectRatio(105.0 / 148.0, contentMode: .fit)
+                            .frame(height: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                            .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+                            .animation(.easeInOut(duration: 0.3), value: style)
+                            .onTapGesture { style.wrapped.toggle() }
 
-                    Toggle("Paper cover", isOn: $style.wrapped)
-                    if let volume = book.volume {
-                        Toggle(isOn: $wholeSeries) {
-                            Text("Whole series")
-                            Text(seriesBooks.count > 1 ? "\(volume.series) · all \(seriesBooks.count) books, and any added later"
-                                                       : "\(volume.series) · and any volumes added later")
-                        }
-                    }
-
-                    if style.wrapped {
-                        papers
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Stamp").font(.headline)
-                            TextField("Stamp", text: $style.stamp)
-                                .textInputAutocapitalization(.characters)
-                                .padding(10)
-                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                            Picker("Stamp shape", selection: $style.stampShape) {
-                                ForEach(CoverStyle.StampShape.allCases) { Text($0.label).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        Toggle("Title slip", isOn: $style.showsLabel)
-                        HStack {
-                            ColorPicker("Paper colour", selection: tint, supportsOpacity: false)
-                            if style.tint != nil {
-                                Button("Reset") { style.tint = nil }.buttonStyle(.bordered)
+                        Toggle("Paper cover", isOn: $style.wrapped)
+                        if let volume = book.volume {
+                            Toggle(isOn: $wholeSeries) {
+                                Text("Whole series")
+                                Text(seriesBooks.count > 1 ? "\(volume.series) · all \(seriesBooks.count) books, and any added later"
+                                                           : "\(volume.series) · and any volumes added later")
                             }
                         }
+
+                        if style.wrapped {
+                            papers
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Stamp").font(.headline)
+                                TextField("Stamp", text: $style.stamp)
+                                    .textInputAutocapitalization(.characters)
+                                    .padding(10)
+                                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                                Picker("Stamp shape", selection: $style.stampShape) {
+                                    ForEach(CoverStyle.StampShape.allCases) { Text($0.label).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                            Toggle("Title slip", isOn: $style.showsLabel)
+                            HStack {
+                                ColorPicker("Paper colour", selection: tint, supportsOpacity: false)
+                                if style.tint != nil {
+                                    Button("Reset") { style.tint = nil }.buttonStyle(.bordered)
+                                }
+                            }
+                        }
+                        if library.originalCover(for: book) == nil { houses.id(Section.houses) }
+                        obis.id(Section.obi)
                     }
-                    obis
+                    .padding(20)
                 }
-                .padding(20)
+                .task {
+                    guard let opensAt else { return }
+                    try? await Task.sleep(for: .milliseconds(500))
+                    proxy.scrollTo(opensAt, anchor: .top)
+                }
             }
-            .defaultScrollAnchor(opensAtObi ? .bottom : nil)
             .navigationTitle("Cover")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,6 +103,37 @@ struct CoverEditorView: View {
     private var seriesBooks: [Book] {
         guard book.volume != nil else { return [book] }
         return library.books.filter { $0.designKey == book.designKey }
+    }
+
+    /// The fifteen publisher covers this book could have under its paper, and the automatic one.
+    private var houses: some View {
+        let kinds: [House.Imprint?] = [nil] + House.Imprint.allCases.map(Optional.some)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Publisher cover").font(.headline)
+            Text("The book's own cover, under the paper.").font(.caption).foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 14) {
+                ForEach(kinds, id: \.self) { kind in
+                    Button {
+                        style.house = kind
+                        style.wrapped = false
+                    } label: {
+                        VStack(spacing: 3) {
+                            HouseCover(book: book, imprint: kind).printed(strength: 0.75)
+                                .aspectRatio(105.0 / 148.0, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 2))
+                                .overlay(RoundedRectangle(cornerRadius: 3)
+                                    .stroke(kind == style.house && !style.wrapped ? Color.accentColor : .clear, lineWidth: 2.5)
+                                    .padding(-3))
+                            Text(kind?.name ?? "Auto · \(House.of(book).imprint.name)").font(.caption2)
+                            Text(kind?.technique ?? "Picked for the book").font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     /// Every kind of obi on this book, wearing what it would say now (or a sample).

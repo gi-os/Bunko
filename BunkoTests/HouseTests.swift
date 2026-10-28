@@ -35,4 +35,28 @@ struct HouseTests {
             #expect(UIImage(systemName: imprint.mark) != nil, "\(imprint.mark)")
         }
     }
+
+    @Test func fifteenHousesEachWithItsOwnMarks() {
+        let houses = House.Imprint.allCases
+        #expect(houses.count == 15)
+        #expect(Set(houses.map(\.name)).count == 15)
+        #expect(Set(houses.map(\.colophon)).count == 15)
+        #expect(houses.allSatisfy { $0.colophon.count == 1 && !$0.technique.isEmpty })
+    }
+
+    @Test func aChosenHouseOverridesThePick() {
+        let b = book("こころ", by: "夏目漱石", rtl: true)
+        #expect(House.of(b, imprint: .kinu).imprint == .kinu)
+        // The colour and shelf code stay the author's.
+        #expect(House.of(b, imprint: .kinu).colour == House.of(b).colour)
+        #expect(House.of(b, imprint: .kinu).shelfCode == House.of(b).shelfCode)
+    }
+
+    @Test func theChosenHouseSyncsAndOldCopiesStillLoad() throws {
+        var style = CoverStyle(paper: .kraft)
+        style.house = .aizome
+        #expect(try JSONDecoder().decode(CoverStyle.self, from: JSONEncoder().encode(style)).house == .aizome)
+        #expect(try JSONDecoder().decode(CoverStyle.self, from: Data(#"{"paper":"kraft"}"#.utf8)).house == nil)
+        #expect(try JSONDecoder().decode(CoverStyle.self, from: Data(#"{"paper":"kraft","house":"marbled"}"#.utf8)).house == nil)
+    }
 }

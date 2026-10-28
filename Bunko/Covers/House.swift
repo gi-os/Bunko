@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// A publisher's house style, for a book with no paper cover and no cover art of its own: the
-/// way a bunko shelf is a row of imprints, each with its own look. The imprint is picked by the
-/// book, the colour by the author (as some houses give each author theirs), and every book gets
-/// its shelf code (や 5 51: the author's initial kana, the author's number, the book's) and price.
+/// way a bunko shelf is a row of imprints, each with its own look and its own way of printing.
+/// The imprint is picked by the book (or chosen), the colour by the author (as some houses give
+/// each author theirs), and every book gets its shelf code (や 5 51: the author's initial kana,
+/// the author's number, the book's).
 struct House: Equatable {
-    enum Imprint: CaseIterable {
+    enum Imprint: String, CaseIterable, Codable, Identifiable {
         /// White, a band of the author's colour across the head carrying the title.
         case shirasagi
         /// The author's colour all over, the title in a double frame.
@@ -16,6 +17,28 @@ struct House: Equatable {
         case chidori
         /// Bold gothic on colour, ranged to the fore-edge.
         case todai
+        /// Parchment with a printed ornamental frame, the title in a ruled box.
+        case shimi
+        /// Stab-bound (和綴じ): dyed paper, thread round the spine, a title slip at the outer head.
+        case watoji
+        /// A plain cover under a crinkled glassine (パラフィン紙) jacket.
+        case kirara
+        /// Dark bookcloth, the title stamped in gold foil.
+        case kinu
+        /// Pale paper, the title blind-embossed (空押し): no ink, only relief.
+        case shimo
+        /// A sun in halftone dots (網点), the title beneath.
+        case nichirin
+        /// Two inks overprinted, a hair out of register.
+        case choyo
+        /// A woodcut block, its grain in the ink and its edges rough, the title cut out of it.
+        case kodama
+        /// Letterpress: a typographic title page, the type bitten into the stock.
+        case namari
+        /// Indigo shibori (絞り): resist rings where the cloth was bound, a pasted slip.
+        case aizome
+
+        var id: Self { self }
 
         var name: String {
             switch self {
@@ -24,6 +47,37 @@ struct House: Equatable {
             case .seirin: "青林文庫"
             case .chidori: "千鳥文庫"
             case .todai: "灯台文庫"
+            case .shimi: "紙魚文庫"
+            case .watoji: "和綴文庫"
+            case .kirara: "雲母文庫"
+            case .kinu: "金烏文庫"
+            case .shimo: "霜月文庫"
+            case .nichirin: "日輪文庫"
+            case .choyo: "重陽文庫"
+            case .kodama: "木霊文庫"
+            case .namari: "鉛文庫"
+            case .aizome: "藍染文庫"
+            }
+        }
+
+        /// How it's made, for the cover editor.
+        var technique: String {
+            switch self {
+            case .shirasagi: "Colour band"
+            case .tsukikage: "Framed"
+            case .seirin: "Spine stripe"
+            case .chidori: "Arrow feathers"
+            case .todai: "Bold gothic"
+            case .shimi: "Ornamental frame"
+            case .watoji: "Stab-bound"
+            case .kirara: "Glassine"
+            case .kinu: "Gold foil"
+            case .shimo: "Blind emboss"
+            case .nichirin: "Halftone"
+            case .choyo: "Overprint"
+            case .kodama: "Woodcut"
+            case .namari: "Letterpress"
+            case .aizome: "Shibori"
             }
         }
 
@@ -35,6 +89,16 @@ struct House: Equatable {
             case .seirin: "林"
             case .chidori: "鳥"
             case .todai: "灯"
+            case .shimi: "魚"
+            case .watoji: "綴"
+            case .kirara: "雲"
+            case .kinu: "烏"
+            case .shimo: "霜"
+            case .nichirin: "輪"
+            case .choyo: "重"
+            case .kodama: "木"
+            case .namari: "鉛"
+            case .aizome: "藍"
             }
         }
 
@@ -46,6 +110,16 @@ struct House: Equatable {
             case .seirin: "leaf.fill"
             case .chidori: "water.waves"
             case .todai: "light.beacon.max.fill"
+            case .shimi: "book.closed.fill"
+            case .watoji: "line.3.horizontal"
+            case .kirara: "sparkles"
+            case .kinu: "sun.max.fill"
+            case .shimo: "snowflake"
+            case .nichirin: "circle.dotted"
+            case .choyo: "circle.circle"
+            case .kodama: "tree.fill"
+            case .namari: "textformat"
+            case .aizome: "drop.fill"
             }
         }
     }
@@ -57,13 +131,14 @@ struct House: Equatable {
     var shelfCode: String
     var price: Int
 
-    static func of(_ book: Book) -> House {
+    /// The book's house: the one chosen for it, or one picked by its series or itself.
+    static func of(_ book: Book, imprint chosen: Imprint? = nil) -> House {
         let author = book.author.trimmingCharacters(in: .whitespaces)
         // A series shares its house and colour; its volumes are numbered in the shelf code.
         let byDesign = hash(book.designKey), byBook = hash(book.id)
         let byAuthor = hash(book.volume?.series ?? (author.isEmpty ? book.title : author))
         let number = book.volume?.index.map { Int($0) } ?? byBook % 40 + 1
-        return House(imprint: Imprint.allCases[byDesign % Imprint.allCases.count],
+        return House(imprint: chosen ?? Imprint.allCases[byDesign % Imprint.allCases.count],
                      colour: authorColours[byAuthor % authorColours.count],
                      shelfCode: "\(initial(of: author.isEmpty ? book.title : author)) \(byAuthor % 60 + 1) \(number)",
                      price: 400 + hash(book.id + "¥") % 50 * 10)
@@ -105,12 +180,14 @@ struct House: Equatable {
 struct HouseCover: View {
     let book: Book
     var large = false
+    /// A house chosen in the cover editor; nil picks one.
+    var imprint: House.Imprint?
 
-    private var house: House { .of(book) }
-    private var vertical: Bool { book.rightToLeft }
-    private var colour: Color { Color(hex: house.colour) }
-    private var cream: Color { Color(hex: "F5F0E4") }
-    private var ink: Color { Color(hex: "26221D") }
+    var house: House { .of(book, imprint: imprint) }
+    var vertical: Bool { book.rightToLeft }
+    var colour: Color { Color(hex: house.colour) }
+    var cream: Color { Color(hex: "F5F0E4") }
+    var ink: Color { Color(hex: "26221D") }
 
     var body: some View {
         GeometryReader { geo in
@@ -207,13 +284,15 @@ struct HouseCover: View {
                 .frame(maxWidth: .infinity, alignment: vertical ? .trailing : .leading)
                 .padding(w * 0.09)
             }
+        default:
+            craftFace(w: w, h: h)
         }
     }
 
     // MARK: Parts
 
     /// The title, whole: vertical for a right-bound book (shrunk, then two columns), else wrapped.
-    @ViewBuilder private func title(_ color: Color, width: CGFloat, height: CGFloat, size: CGFloat) -> some View {
+    @ViewBuilder func title(_ color: Color, width: CGFloat, height: CGFloat, size: CGFloat) -> some View {
         if vertical {
             let chars = Array(book.title)
             let (columns, glyph) = PaperCover.verticalSlip(count: chars.count, base: size, height: height)
@@ -243,7 +322,7 @@ struct HouseCover: View {
     }
 
     /// The author, and the series and volume when the title doesn't carry them.
-    private func author(_ color: Color, w: CGFloat, gothic: Bool = false) -> some View {
+    func author(_ color: Color, w: CGFloat, gothic: Bool = false) -> some View {
         let series = book.series.flatMap { name in book.volume?.index.map { "\(name) \(Book.Volume.label($0))" } ?? name }
         return Text([book.author, series ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
             .font(gothic ? .system(size: w * 0.055, weight: .bold)
@@ -256,7 +335,7 @@ struct HouseCover: View {
     }
 
     /// や 5 51: the initial boxed, then the numbers.
-    private func shelfCode(_ color: Color, w: CGFloat) -> some View {
+    func shelfCode(_ color: Color, w: CGFloat) -> some View {
         let parts = house.shelfCode.split(separator: " ").map(String.init)
         return HStack(spacing: w * 0.012) {
             Text(parts.first ?? "")
@@ -270,7 +349,7 @@ struct HouseCover: View {
     }
 
     /// The house mark and name.
-    private func foot(_ color: Color, w: CGFloat) -> some View {
+    func foot(_ color: Color, w: CGFloat) -> some View {
         VStack(spacing: w * 0.015) {
             Text(house.imprint.colophon)
                 .font(Typesetter.swiftUIFont(.mincho, size: w * 0.05, bold: true))

@@ -87,7 +87,7 @@ struct BookSpine: View {
     static let height: CGFloat = 214
 
     private var japanese: Bool { book.rightToLeft && !book.rowsRightToLeft }
-    private var house: House { .of(book) }
+    private var house: House { .of(book, imprint: style.house) }
     private var colour: Color { Color(hex: house.colour) }
     private let cream = Color(hex: "F5F0E4")
     private let ink = Color(hex: "26221D")
@@ -197,6 +197,16 @@ struct BookSpine: View {
                 foot(cream)
             }
             .frame(width: w, height: h).background(colour)
+        default:
+            // The houses made by a process (foil, emboss, woodcut…): a plain house spine for now.
+            VStack(spacing: gap) {
+                Rectangle().fill(colour).frame(height: h * 0.035)
+                SpineText(book.title, vertical: japanese, size: w * 0.5, bold: true, colour: ink).frame(maxHeight: .infinity)
+                author(colour, false)
+                shelfCode(colour)
+                foot(colour)
+            }
+            .frame(width: w, height: h).background(cream)
         }
     }
 

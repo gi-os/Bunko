@@ -37,7 +37,7 @@ struct CoverView: View {
                 .overlay(Image(uiImage: original).resizable().scaledToFill())
                 .clipped()
         } else {
-            HouseCover(book: book, large: large).printed(strength: large ? 1 : 0.75)
+            HouseCover(book: book, large: large, imprint: style.house).printed(strength: large ? 1 : 0.75)
         }
     }
 }
@@ -102,8 +102,8 @@ struct PaperCover: View {
         let area = size.width * size.height
         switch style.paper.texture {
         case .speckle, .waves, .hemp:
-            if style.paper.texture == .waves { drawWaves(&ctx, size: size, base: base, ink: ink) }
-            if style.paper.texture == .hemp { drawHemp(&ctx, size: size, ink: ink) }
+            if style.paper.texture == .waves { Self.drawWaves(&ctx, size: size, scale: size.width, base: base, ink: ink) }
+            if style.paper.texture == .hemp { Self.drawHemp(&ctx, size: size, scale: size.width, ink: ink) }
             // The odd inclusion in the pulp; the scanned grain does the rest.
             for _ in 0..<Int(area / 700) {
                 let r = CGFloat.random(in: 0.4...1.3, using: &rng)
@@ -131,8 +131,9 @@ struct PaperCover: View {
     }
 
     /// 青海波: rows of fanned rings, each row tucked over the one above so only the arches show.
-    private func drawWaves(_ ctx: inout GraphicsContext, size: CGSize, base: Color, ink: Color) {
-        let r = size.width * 0.075
+    /// `scale` is the cover's width: a spine cut from the same paper draws it at the cover's size.
+    static func drawWaves(_ ctx: inout GraphicsContext, size: CGSize, scale: CGFloat, base: Color, ink: Color) {
+        let r = scale * 0.075
         var y = -r / 2
         var row = 0
         while y < size.height + r {
@@ -152,8 +153,8 @@ struct PaperCover: View {
 
     /// 麻の葉: a grid of triangles, each with its centre joined to its corners, so six-pointed
     /// hemp leaves open round every crossing.
-    private func drawHemp(_ ctx: inout GraphicsContext, size: CGSize, ink: Color) {
-        let a = size.width * 0.17
+    static func drawHemp(_ ctx: inout GraphicsContext, size: CGSize, scale: CGFloat, ink: Color) {
+        let a = scale * 0.17
         let h = a * sqrt(3) / 2
         var lines = Path()
         for j in -1...Int(size.height / h) + 1 {
@@ -412,5 +413,30 @@ struct PaperCover: View {
         let first = text[..<split].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
         let second = text[text.index(after: split)...].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
         return [first, second].filter { !$0.isEmpty }
+    }
+}
+
+/// A paper's colour and printed pattern alone (青海波, 麻の葉), at the size it has on a cover
+/// `coverWidth` wide: for a spine cut from the same paper.
+struct PaperPattern: View {
+    let style: CoverStyle
+    let coverWidth: CGFloat
+
+    var body: some View {
+        Canvas { ctx, size in
+            let base = Color(hex: style.baseHex), ink = Color(hex: style.paper.ink)
+            if style.paper == .kraft && style.tint == nil {
+                ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .tiledImage(Image(uiImage: Print.kraft), scale: Print.tileScale(coverWidth: coverWidth)))
+                return
+            }
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(base))
+            switch style.paper.texture {
+            case .waves: PaperCover.drawWaves(&ctx, size: size, scale: coverWidth, base: base, ink: ink)
+            case .hemp: PaperCover.drawHemp(&ctx, size: size, scale: coverWidth, ink: ink)
+            default: break
+            }
+        }
+        .clipped()
     }
 }
