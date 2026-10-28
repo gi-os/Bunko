@@ -153,12 +153,12 @@ struct ShelfView: View {
         }
     }
 
-    /// Screenshots show the printed papers and the seal: the Japanese sample in waves with a
-    /// bookshop's 朱印, the others in hemp leaf.
+    /// Screenshots show the printed papers and the seal on the Japanese sample (waves, a
+    /// bookshop's 朱印) and the others out of their paper, in their publisher's house cover.
     private func dressForScreenshots() {
         for book in library.books {
             var style = CoverStyle(paper: book.rightToLeft ? .seigaiha : .asanoha, stamp: book.rightToLeft ? "文庫堂" : nil)
-            if book.rightToLeft { style.stampShape = .seal }
+            if book.rightToLeft { style.stampShape = .seal } else { style.wrapped = false }
             sync.setCover(style, for: book)
         }
     }

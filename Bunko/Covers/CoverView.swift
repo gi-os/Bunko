@@ -36,7 +36,7 @@ struct CoverView: View {
                 .overlay(Image(uiImage: original).resizable().scaledToFill())
                 .clipped()
         } else {
-            PlainCover(book: book, large: large)
+            HouseCover(book: book, large: large)
         }
     }
 }
@@ -369,28 +369,5 @@ struct PaperCover: View {
         let first = text[..<split].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
         let second = text[text.index(after: split)...].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
         return [first, second].filter { !$0.isEmpty }
-    }
-}
-
-/// A book with no cover art of its own, unwrapped: plain cloth with its title.
-struct PlainCover: View {
-    let book: Book
-    var large = false
-
-    var body: some View {
-        let hue = Double(book.id.unicodeScalars.reduce(0) { ($0 &+ Int($1.value)) % 360 }) / 360
-        ZStack {
-            Color(hue: hue, saturation: 0.35, brightness: 0.45)
-            VStack(spacing: large ? 18 : 6) {
-                Text(book.title)
-                    .font(Typesetter.swiftUIFont(.serif, size: large ? 34 : 13, bold: true))
-                    .multilineTextAlignment(.center)
-                if !book.author.isEmpty {
-                    Text(book.author).font(.custom("Literata-Italic", size: large ? 20 : 9))
-                }
-            }
-            .foregroundStyle(.white.opacity(0.9))
-            .padding(large ? 40 : 10)
-        }
     }
 }
