@@ -12,7 +12,7 @@ struct House: Equatable {
         case tsukikage
         /// White, a stripe down the spine side with the imprint's name.
         case seirin
-        /// Stripes over the head, a white label for the title.
+        /// Arrow feathers (矢絣) over the head, a white label for the title.
         case chidori
         /// Bold gothic on colour, ranged to the fore-edge.
         case todai
@@ -27,7 +27,18 @@ struct House: Equatable {
             }
         }
 
-        /// The house mark at the foot.
+        /// The house's printed mark at the foot of a cover: one character in a ring.
+        var colophon: String {
+            switch self {
+            case .shirasagi: "鷺"
+            case .tsukikage: "月"
+            case .seirin: "林"
+            case .chidori: "鳥"
+            case .todai: "灯"
+            }
+        }
+
+        /// A symbol for the house, where a printed mark would be too small (the spine).
         var mark: String {
             switch self {
             case .shirasagi: "bird.fill"
@@ -107,7 +118,6 @@ struct HouseCover: View {
             ZStack {
                 face(w: w, h: h)
                 Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile).blendMode(.multiply).opacity(0.5)
-                if let number = book.volume?.index { volume(number, w: w) }
             }
             .frame(width: w, height: h)
             .clipped()
@@ -163,16 +173,7 @@ struct HouseCover: View {
         case .chidori:
             VStack(spacing: 0) {
                 ZStack {
-                    Canvas { ctx, size in
-                        var x: CGFloat = -size.height
-                        while x < size.width {
-                            var line = Path()
-                            line.move(to: CGPoint(x: x, y: size.height))
-                            line.addLine(to: CGPoint(x: x + size.height, y: 0))
-                            ctx.stroke(line, with: .color(colour), lineWidth: w * 0.035)
-                            x += w * 0.09
-                        }
-                    }
+                    ArrowFeathers(column: w * 0.14).fill(colour)
                     .background(cream)
                     title(ink, width: w * 0.62, height: h * 0.38, size: w * 0.1)
                         .padding(w * 0.05)
@@ -241,8 +242,10 @@ struct HouseCover: View {
         }
     }
 
+    /// The author, and the series and volume when the title doesn't carry them.
     private func author(_ color: Color, w: CGFloat, gothic: Bool = false) -> some View {
-        Text(book.author)
+        let series = book.series.flatMap { name in book.volume?.index.map { "\(name) \(Book.Volume.label($0))" } ?? name }
+        return Text([book.author, series ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
             .font(gothic ? .system(size: w * 0.055, weight: .bold)
                          : Typesetter.swiftUIFont(vertical ? .mincho : .serif, size: w * 0.06))
             .tracking(w * 0.005)
@@ -266,31 +269,19 @@ struct HouseCover: View {
         .lineLimit(1)
     }
 
-    /// The house mark and name, and the price.
+    /// The house mark and name.
     private func foot(_ color: Color, w: CGFloat) -> some View {
-        VStack(spacing: w * 0.012) {
-            Image(systemName: house.imprint.mark).font(.system(size: w * 0.06))
-            Text(house.imprint.name).font(Typesetter.swiftUIFont(.mincho, size: w * 0.045, bold: true)).tracking(w * 0.01)
-            Text("¥\(house.price)").font(.system(size: w * 0.032).monospacedDigit()).opacity(0.75)
+        VStack(spacing: w * 0.015) {
+            Text(house.imprint.colophon)
+                .font(Typesetter.swiftUIFont(.mincho, size: w * 0.05, bold: true))
+                .frame(width: w * 0.085, height: w * 0.085)
+                .overlay(Circle().stroke(color, lineWidth: max(0.5, w * 0.005)))
+            Text(house.imprint.name).font(Typesetter.swiftUIFont(.mincho, size: w * 0.042, bold: true)).tracking(w * 0.012)
         }
         .foregroundStyle(color)
         .lineLimit(1)
         .minimumScaleFactor(0.5)
         .padding(.bottom, w * 0.06)
-    }
-
-    /// A series volume's number, in a roundel at the head of the fore-edge.
-    private func volume(_ number: Double, w: CGFloat) -> some View {
-        let onColour = house.imprint == .tsukikage || house.imprint == .todai
-        return Text(Book.Volume.label(number))
-            .font(Typesetter.swiftUIFont(.mincho, size: w * 0.08, bold: true))
-            .foregroundStyle(onColour ? colour : cream)
-            .frame(width: w * 0.14, height: w * 0.14)
-            .background(Circle().fill(onColour ? cream : colour))
-            .overlay(Circle().stroke(onColour ? colour : cream, lineWidth: max(0.5, w * 0.006)).padding(w * 0.01))
-            .padding(w * (house.imprint == .tsukikage ? 0.1 : 0.05))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: vertical ? .topLeading : .topTrailing)
-            .padding(.top, house.imprint == .chidori ? w * 0.02 : w * 0.1)
     }
 
     /// 青林's stripe down the spine side, its name set vertically in it.
@@ -305,5 +296,28 @@ struct HouseCover: View {
         .frame(width: w * 0.14)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(colour)
+    }
+}
+
+/// 矢絣: columns of arrow feathers, each column half a feather down from the last. `column` is
+/// a column's width; a feather is a little taller than that.
+struct ArrowFeathers: Shape {
+    var column: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let c = max(column, 2), r = c * 1.1
+        var feathers = Path()
+        for i in 0...Int(rect.width / c) + 1 {
+            let x = rect.minX + CGFloat(i) * c
+            var y = rect.minY + (i.isMultiple(of: 2) ? 0 : -r / 2) - r
+            while y < rect.maxY + r {
+                feathers.addLines([CGPoint(x: x, y: y), CGPoint(x: x + c / 2, y: y + r * 0.42),
+                                   CGPoint(x: x + c, y: y), CGPoint(x: x + c, y: y + r * 0.5),
+                                   CGPoint(x: x + c / 2, y: y + r * 0.92), CGPoint(x: x, y: y + r * 0.5)])
+                feathers.closeSubpath()
+                y += r
+            }
+        }
+        return feathers
     }
 }

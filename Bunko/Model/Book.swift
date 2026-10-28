@@ -32,6 +32,15 @@ struct Book: Codable, Identifiable, Hashable {
         static func label(_ index: Double) -> String {
             index.rounded() == index ? String(Int(index)) : String(format: "%g", index)
         }
+
+        /// 三, 十二, 二十三 for a vertical title; an in-between or very high volume stays in figures.
+        static func kanji(_ index: Double) -> String {
+            let n = Int(index)
+            guard index.rounded() == index, (1...99).contains(n) else { return label(index) }
+            let digits = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+            let tens = n / 10, ones = n % 10
+            return (tens == 0 ? "" : (tens == 1 ? "" : digits[tens]) + "十") + digits[ones]
+        }
     }
 
     /// Its series, from its metadata or else its title (Vol. 3, 第3巻, (3)), so books that came

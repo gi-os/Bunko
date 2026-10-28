@@ -1,0 +1,7 @@
+Paper scans from ambientCG (https://ambientcg.com), released under CC0 1.0 Universal
+(public domain, https://creativecommons.org/publicdomain/zero/1.0/). Resized for Bunko; the grain-*
+files are greyscale versions shifted to 50% grey for soft-light blending.
+
+kraft-ribbed.jpg, grain-laid.jpg   Paper004 (ribbed kraft wrapping paper)
+grain-tooth.jpg                    Paper006 (smooth kraft paper)
+grain-crinkle.jpg                  Paper003 (creased white paper)
