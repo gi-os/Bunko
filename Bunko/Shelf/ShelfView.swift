@@ -7,6 +7,7 @@ struct ShelfView: View {
     @Environment(SyncStore.self) private var sync
     @State private var reading: ReaderModel?
     @State private var dressing: Book?
+    @State private var editingInfo: Book?
     @State private var importing = false
     @State private var showsSettings = false
     @State private var showsShops = false
@@ -88,6 +89,7 @@ struct ShelfView: View {
                 CoverEditorView(book: book, style: sync.cover(for: book),
                                 opensAtObi: UserDefaults.standard.string(forKey: "gios-screen") == "obi")
             }
+            .sheet(item: $editingInfo) { book in BookInfoView(book: book) }
             .sheet(isPresented: $showsSettings) { SettingsView() }
             .sheet(isPresented: $showsShops) { NavigationStack { ShopsView() } }
             .fullScreenCover(item: $reading) { model in
@@ -95,6 +97,8 @@ struct ShelfView: View {
             }
             .onAppear(perform: routeForScreenshots)
             .onChange(of: opener.request, initial: true) { _, id in pickUp(id) }
+            // Book details corrected on another device.
+            .onChange(of: sync.revision, initial: true) { library.applyEdits(from: sync) }
         }
     }
 
@@ -125,6 +129,7 @@ struct ShelfView: View {
     private func menu(for book: Book) -> some View {
         Button { open(book) } label: { Label("Read", systemImage: "book") }
         Button { dressing = book } label: { Label("Change cover", systemImage: "paintbrush") }
+        Button { editingInfo = book } label: { Label("Edit info", systemImage: "pencil") }
         let cover = sync.cover(for: book)
         Button {
             var style = cover
@@ -163,6 +168,12 @@ struct ShelfView: View {
         case "closed-en": if let english { open(english, closed: true) }
         case "cover": dressing = japanese
         case "obi": dressing = japanese
+        case "info": editingInfo = japanese
+        case "navigator":
+            if let japanese {
+                open(japanese, closed: false)
+                reading?.showsNavigator = true
+            }
         case "settings": showsSettings = true
         case "shops": showsShops = true
         default: break

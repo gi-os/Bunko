@@ -80,6 +80,13 @@ final class Library {
         return book
     }
 
+    /// Replaces a book's details (same ID, same file).
+    func update(_ book: Book) {
+        guard let index = books.firstIndex(where: { $0.id == book.id }) else { return }
+        books[index] = book
+        save()
+    }
+
     func remove(_ book: Book) {
         try? FileManager.default.removeItem(at: fileURL(for: book))
         try? FileManager.default.removeItem(at: coverURL(for: book.id))

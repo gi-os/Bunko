@@ -11,7 +11,8 @@ is in `.gios/` (read-only here: change it in gi-os/.github).
   on wide screens (the iPhone Duo unfolded, any iPhone on its side), stacked page edges that show
   how far in you are, a ribbon bookmark (スピン), and bookshop paper covers (書店カバー).
 - Gestures, not buttons: pinch the pages together to close the book → its cover fills the screen →
-  swipe it away to put it back on the shelf (spread two fingers to reopen). Three-finger tap opens
+  swipe it away to put it back on the shelf (spread two fingers to reopen). Two-finger tap brings up the chapters and a
+  scrubber through the book (a paper band, gone on the next tap). Three-finger tap opens
   settings. Tap the ribbon to go back to it, hold it to move it. Backgrounding (folding the Duo)
   closes the book.
 - Code map: `Bunko/App` entry point; `Bunko/Model` books, EPUB/ZIP/HTML/plain-text reading, the
@@ -28,6 +29,8 @@ is in `.gios/` (read-only here: change it in gi-os/.github).
   sheet; new actions are gestures.
 - Reading position is a character offset (`ReadingProgress.offset`), never a page number: pages
   change with font, size and spread.
+- Book details you edit (`BookInfo`, synced as `info.<id>`) are applied over the file's; the
+  book keeps its ID and its file is never rewritten.
 - Synced types (`ReaderSettings`, `CoverStyle`) decode every field with a default, so an older
   copy from another device still loads. Keep that when adding fields.
 - iCloud is the key-value store only (1 MB): small state, never book files. `ICLOUD="true"` in

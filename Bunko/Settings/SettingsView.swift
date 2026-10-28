@@ -118,7 +118,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Text("Three fingers tap a page for these settings. Pinch the pages together to close the book; swipe the cover away to put it back on the shelf.")
+                    Text("Two fingers tap a page for the chapters and a scrubber through the book; three fingers for these settings. Pinch the pages together to close the book; swipe the cover away to put it back on the shelf.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A book, edge to edge: the screen is the page (or the open spread). It opens on its cover; tap
 /// the cover and it swings open on its spine. No buttons. Pinch to shut it, then swipe the closed
-/// book away; three fingers for settings.
+/// book away; two fingers tap for the chapters and a scrubber, three for settings.
 struct ReaderView: View {
     @State private var model: ReaderModel
     @Environment(SyncStore.self) private var sync
@@ -30,6 +30,10 @@ struct ReaderView: View {
                 } else if !model.pages.isEmpty {
                     openBook(size: geo.size)
                         .allowsHitTesting(!model.isClosed)
+                }
+                if model.showsNavigator && !model.isClosed && !model.pages.isEmpty {
+                    NavigatorView(model: model)
+                        .transition(.opacity)
                 }
                 if model.isClosed {
                     ClosedBookView(model: model, cover: sync.cover(for: model.book),
