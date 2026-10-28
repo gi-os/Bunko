@@ -117,8 +117,10 @@ struct BookContent: Equatable, Sendable {
 /// cover wears in, the obi shows today's pages).
 struct ReadingProgress: Codable, Equatable {
     var offset: Int
-    /// Where the ribbon (スピン) lies: set when the book is closed or by holding the ribbon.
+    /// Where the ribbon (スピン) lies, when it's in: laid by tapping the gutter or holding the ribbon.
     var ribbon: Int
+    /// The ribbon isn't in the book until you lay it in.
+    var hasRibbon = false
     var fraction: Double
     var startedAt: Date?
     var finishedAt: Date?
@@ -159,6 +161,7 @@ struct ReadingProgress: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         offset = (try? c.decodeIfPresent(Int.self, forKey: .offset)) ?? 0
         ribbon = (try? c.decodeIfPresent(Int.self, forKey: .ribbon)) ?? offset
+        hasRibbon = (try? c.decodeIfPresent(Bool.self, forKey: .hasRibbon)) ?? false
         fraction = (try? c.decodeIfPresent(Double.self, forKey: .fraction)) ?? 0
         startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
         finishedAt = try? c.decodeIfPresent(Date.self, forKey: .finishedAt)

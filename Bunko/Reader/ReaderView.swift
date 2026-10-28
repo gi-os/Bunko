@@ -65,10 +65,23 @@ struct ReaderView: View {
         return ZStack(alignment: .topLeading) {
             PageTurner(model: model, curl: model.settings.turn == .curl, version: model.pagesVersion, jump: model.jump)
                 .id("\(model.settings.turn)-\(layout.spread)-\(layout.rightToLeft)")
-            RibbonView(color: Color(hex: model.settings.ribbonColor), height: size.height - 6)
-                .onTapGesture { model.followRibbon() }
-                .onLongPressGesture(minimumDuration: 0.5) { model.moveRibbonHere() }
-                .position(x: ribbonX, y: (size.height - 6) / 2)
+            if model.hasRibbon {
+                RibbonView(color: Color(hex: model.settings.ribbonColor), height: size.height - 6)
+                    .onTapGesture { model.tapRibbon() }
+                    .onLongPressGesture(minimumDuration: 0.5) { model.moveRibbonHere() }
+                    .position(x: ribbonX, y: (size.height - 6) / 2)
+            } else {
+                // Where the ribbon would lie: tap the gutter to lay it in this page.
+                Color.clear
+                    .frame(width: 34, height: size.height - 6)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.layRibbonHere() }
+                    .position(x: ribbonX, y: (size.height - 6) / 2)
+                    .accessibilityElement()
+                    .accessibilityLabel("Ribbon")
+                    .accessibilityHint("Tap to lay the ribbon in this page.")
+                    .accessibilityAddTraits(.isButton)
+            }
         }
         // Pinching squeezes the pages toward the spine.
         .scaleEffect(x: model.squeeze, y: 1 - (1 - model.squeeze) * 0.1)
@@ -90,14 +103,13 @@ struct RibbonView: View {
             .frame(width: 34, height: height)
             .contentShape(Rectangle())
             .accessibilityLabel("Ribbon")
-            .accessibilityHint("Tap to go back to the ribbon. Hold to move it to this page.")
+            .accessibilityHint("Tap to go back to the ribbon, or on its own page to take it out. Hold to move it to this page.")
     }
 }
 
 /// The shut book: its paper cover fills the screen but for the page block showing past its
-/// fore-edge and foot, the ribbon's tail out of the bottom, the obi round its foot. Tap (or
-/// spread two fingers) and the cover board swings open on its spine, the block staying put;
-/// swipe the book away to put it back on the shelf.
+/// fore-edge and foot, the obi round its foot. Tap (or spread two fingers) and the cover board
+/// swings open on its spine, the block staying put; swipe the book away to put it back on the shelf.
 struct ClosedBookView: View {
     let model: ReaderModel
     let cover: CoverStyle
@@ -131,9 +143,6 @@ struct ClosedBookView: View {
                     // Opening: the cover turns on the spine (the right edge for a Japanese book).
                     .rotation3DEffect(.degrees(swing * (spineOnRight ? 100 : -100)), axis: (x: 0, y: 1, z: 0),
                                       anchor: spineOnRight ? .trailing : .leading, perspective: 0.45)
-                // The ribbon belongs to the pages: it stays as the cover swings away.
-                RibbonView(color: Color(hex: model.settings.ribbonColor), height: 70)
-                    .offset(x: spineOnRight ? geo.size.width * 0.3 : -geo.size.width * 0.3, y: 40)
                 if showsHint {
                     Text("Tap to open · Swipe away to put it back")
                         .font(.caption)
