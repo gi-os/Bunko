@@ -175,7 +175,7 @@ final class ReaderModel {
         progress.offset = currentOffset
         progress.ribbon = ribbonOffset
         progress.fraction = fraction
-        if currentPage >= pages.count - 1, progress.finishedAt == nil, progress.pagesRead > 0 { progress.finishedAt = .now }
+        if layout.showsLastPage(atPage: currentPage), progress.finishedAt == nil, progress.pagesRead > 0 { progress.finishedAt = .now }
         sync.setProgress(progress, for: book)
     }
 }

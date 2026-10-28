@@ -23,6 +23,17 @@ struct SpreadLayout: Equatable {
     /// The book's binding: the right edge for a right-to-left single page.
     var bindingOnRight: Bool { rightToLeft }
 
+    /// A single curling page bound on the right. UIKit's page curl only turns forward from right
+    /// to left (whatever the spine location), so the page turner mirrors itself, and each page
+    /// back, to turn the Japanese way: swipe left to right and the leaf lifts by its left edge.
+    var mirrorsCurl: Bool { rightToLeft && !spread }
+
+    /// Whether the screen showing `page` also shows the book's last page (in a spread, the last
+    /// spread's first page is the current one).
+    func showsLastPage(atPage page: Int) -> Bool {
+        pageCount > 0 && spreadIndex(ofPage: page) == spreadIndex(ofPage: pageCount - 1)
+    }
+
     /// How much of the book lies under each screen edge, 0...1, for the stacked page edges: pages
     /// already read pile up on the side you came from.
     func edgeFractions(atPage page: Int) -> (left: CGFloat, right: CGFloat) {

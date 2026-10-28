@@ -27,6 +27,23 @@ struct SpreadLayoutTests {
         let ltr = SpreadLayout(pageCount: 11, spread: false, rightToLeft: false)
         #expect(ltr.edgeFractions(atPage: 5) == (left: 0.5, right: 0.5))
     }
+
+    @Test func lastPageCountsInTheLastSpread() {
+        // The last spread's current page is its first, so a spread finishes a page early.
+        let spread = SpreadLayout(pageCount: 10, spread: true, rightToLeft: true)
+        #expect(spread.showsLastPage(atPage: 8))
+        #expect(!spread.showsLastPage(atPage: 7))
+        let single = SpreadLayout(pageCount: 10, spread: false, rightToLeft: true)
+        #expect(single.showsLastPage(atPage: 9))
+        #expect(!single.showsLastPage(atPage: 8))
+        #expect(!SpreadLayout(pageCount: 0, spread: false, rightToLeft: false).showsLastPage(atPage: 0))
+    }
+
+    @Test func onlyARightBoundSinglePageCurlsMirrored() {
+        #expect(SpreadLayout(pageCount: 3, spread: false, rightToLeft: true).mirrorsCurl)
+        #expect(!SpreadLayout(pageCount: 3, spread: true, rightToLeft: true).mirrorsCurl)
+        #expect(!SpreadLayout(pageCount: 3, spread: false, rightToLeft: false).mirrorsCurl)
+    }
 }
 
 struct PaginationTests {
