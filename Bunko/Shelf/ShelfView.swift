@@ -153,12 +153,12 @@ struct ShelfView: View {
         }
     }
 
-    /// Screenshots show the printed papers and the seal: the Japanese sample in waves with a
-    /// bookshop's 朱印, the others in hemp leaf.
+    /// Screenshots show the printed papers and the seal on the Japanese sample (waves, a
+    /// bookshop's 朱印) and the others out of their paper, in their publisher's house cover.
     private func dressForScreenshots() {
         for book in library.books {
             var style = CoverStyle(paper: book.rightToLeft ? .seigaiha : .asanoha, stamp: book.rightToLeft ? "文庫堂" : nil)
-            if book.rightToLeft { style.stampShape = .seal }
+            if book.rightToLeft { style.stampShape = .seal } else { style.wrapped = false }
             sync.setCover(style, for: book)
         }
     }
@@ -185,13 +185,14 @@ struct ShelfBook: View {
                 .clipShape(UnevenRoundedRectangle(cornerRadii: .init(
                     topLeading: book.rightToLeft ? 3 : 1, bottomLeading: book.rightToLeft ? 3 : 1,
                     bottomTrailing: book.rightToLeft ? 1 : 3, topTrailing: book.rightToLeft ? 1 : 3)))
+                .bookDepth(spineOnRight: book.rightToLeft, depth: 5)
                 .shadow(color: .black.opacity(0.28), radius: 6, x: 0, y: 5)
                 // Behind the book, so the ribbon's tail hangs out from under it rather than across the obi.
                 .background(alignment: book.rightToLeft ? .bottomLeading : .bottomTrailing) {
                     if let progress, progress.fraction > 0 {
                         RibbonView(color: ribbon, height: 26)
                             .frame(width: 8)
-                            .offset(x: book.rightToLeft ? 22 : -22, y: 18)
+                            .offset(x: book.rightToLeft ? 22 : -22, y: 22)
                             .allowsHitTesting(false)
                     }
                 }
