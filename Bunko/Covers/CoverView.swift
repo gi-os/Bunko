@@ -54,7 +54,7 @@ struct PaperCover: View {
             let rect = CGRect(origin: .zero, size: size)
             ctx.fill(Path(rect), with: .color(Color(uiColor: base)))
             var rng = SeededRandom(string: book.id + style.paper.rawValue)
-            drawTexture(&ctx, size: size, rng: &rng)
+            drawTexture(&ctx, size: size, rng: &rng, base: Color(uiColor: base), ink: ink)
 
             // The flaps fold round the boards a little in from each edge; the spine is shaded.
             let spineOnRight = book.rightToLeft
@@ -70,17 +70,24 @@ struct PaperCover: View {
                 endPoint: CGPoint(x: spineOnRight ? size.width - spineWidth : spineWidth, y: 0)))
 
             if style.showsLabel { drawLabel(&ctx, size: size, unit: unit) }
-            if style.stampShape != .none { drawStamp(&ctx, size: size, ink: ink, unit: unit) }
+            switch style.stampShape {
+            case .none: break
+            case .seal: drawSeal(&ctx, size: size, unit: unit)
+            case .circle, .square: drawStamp(&ctx, size: size, ink: ink, unit: unit)
+            }
         }
         .accessibilityElement()
         .accessibilityLabel("\(book.title), in a \(style.paper.label.lowercased()) paper cover")
     }
 
-    private func drawTexture(_ ctx: inout GraphicsContext, size: CGSize, rng: inout SeededRandom) {
+    private func drawTexture(_ ctx: inout GraphicsContext, size: CGSize, rng: inout SeededRandom, base: Color, ink: Color) {
         let area = size.width * size.height
         switch style.paper.texture {
-        case .speckle:
-            for _ in 0..<Int(area / 90) {
+        case .speckle, .waves, .hemp:
+            if style.paper.texture == .waves { drawWaves(&ctx, size: size, base: base, ink: ink) }
+            if style.paper.texture == .hemp { drawHemp(&ctx, size: size, ink: ink) }
+            // Printed papers get a finer grain over the print.
+            for _ in 0..<Int(area / (style.paper.texture == .speckle ? 90 : 180)) {
                 let r = CGFloat.random(in: 0.4...1.6, using: &rng)
                 let p = CGRect(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng), width: r, height: r)
                 let dark = Bool.random(using: &rng)
@@ -119,6 +126,51 @@ struct PaperCover: View {
                 y += 5
             }
         }
+    }
+
+    /// 青海波: rows of fanned rings, each row tucked over the one above so only the arches show.
+    private func drawWaves(_ ctx: inout GraphicsContext, size: CGSize, base: Color, ink: Color) {
+        let r = size.width * 0.075
+        var y = -r / 2
+        var row = 0
+        while y < size.height + r {
+            var x = (row.isMultiple(of: 2) ? 0 : r) - 2 * r
+            while x < size.width + 2 * r {
+                let fan = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
+                ctx.fill(Path(ellipseIn: fan), with: .color(base))
+                var rings = Path()
+                for k in 0..<4 { rings.addEllipse(in: fan.insetBy(dx: r * CGFloat(k) * 0.24, dy: r * CGFloat(k) * 0.24)) }
+                ctx.stroke(rings, with: .color(ink.opacity(0.26)), lineWidth: max(0.5, r * 0.055))
+                x += r * 2
+            }
+            y += r / 2
+            row += 1
+        }
+    }
+
+    /// 麻の葉: a grid of triangles, each with its centre joined to its corners, so six-pointed
+    /// hemp leaves open round every crossing.
+    private func drawHemp(_ ctx: inout GraphicsContext, size: CGSize, ink: Color) {
+        let a = size.width * 0.17
+        let h = a * sqrt(3) / 2
+        var lines = Path()
+        for j in -1...Int(size.height / h) + 1 {
+            let top = CGFloat(j) * h, bottom = top + h
+            let topShift: CGFloat = j.isMultiple(of: 2) ? 0 : a / 2
+            for k in -1...Int(size.width / a) + 1 {
+                let t0 = CGPoint(x: CGFloat(k) * a + topShift, y: top), t1 = CGPoint(x: t0.x + a, y: top)
+                let b0 = CGPoint(x: t0.x - a / 2, y: bottom), b1 = CGPoint(x: b0.x + a, y: bottom)
+                for triangle in [[t0, t1, CGPoint(x: t0.x + a / 2, y: bottom)], [b0, b1, CGPoint(x: b0.x + a / 2, y: top)]] {
+                    let centre = CGPoint(x: triangle.map(\.x).reduce(0, +) / 3, y: triangle.map(\.y).reduce(0, +) / 3)
+                    lines.addLines(triangle + [triangle[0]])
+                    for corner in triangle {
+                        lines.move(to: centre)
+                        lines.addLine(to: corner)
+                    }
+                }
+            }
+        }
+        ctx.stroke(lines, with: .color(ink.opacity(0.32)), lineWidth: max(0.5, a * 0.022))
     }
 
     /// The title slip: up near the head, on the side away from the spine.
@@ -188,6 +240,65 @@ struct PaperCover: View {
             text.shading = .color(ink)
             let y = centerY + (CGFloat(i) - CGFloat(lines.count - 1) / 2) * lineHeight
             stamp.draw(text, at: CGPoint(x: 0, y: y))
+        }
+    }
+
+    /// A vermilion seal (朱印) in place of the stamp: a solid block with the letters cut out of it,
+    /// Japanese in columns read right to left, anything else in rows, pressed a little crooked,
+    /// the ink thin towards one corner and round the edges.
+    private func drawSeal(_ ctx: inout GraphicsContext, size: CGSize, unit: CGFloat) {
+        let (lines, vertical) = CoverStyle.sealLines(style.stamp)
+        guard !lines.isEmpty else { return }
+        // Laid out on a 100pt grid, then scaled to fit near the foot.
+        let em: CGFloat = 100
+        let font = Typesetter.swiftUIFont(.mincho, size: em * 0.84, bold: true)
+        let pad = em * 0.3
+        let rows = lines.map { ctx.resolve(Text($0).font(font).tracking(em * 0.04)) }
+        let content = vertical
+            ? CGSize(width: em * CGFloat(lines.count), height: em * CGFloat(lines.map(\.count).max() ?? 1))
+            : CGSize(width: rows.map { $0.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: em)).width }.max() ?? em,
+                     height: em * 0.92 * CGFloat(lines.count))
+        let box = CGRect(x: 0, y: 0, width: content.width + pad * 2, height: content.height + pad * 2)
+        var seal = ctx
+        seal.translateBy(x: book.rightToLeft ? size.width * 0.36 : size.width * 0.68, y: size.height * 0.8)
+        seal.rotate(by: .degrees(-4))
+        seal.scaleBy(x: min(size.width * 0.3 / box.width, size.height * 0.2 / box.height),
+                     y: min(size.width * 0.3 / box.width, size.height * 0.2 / box.height))
+        seal.translateBy(x: -box.midX, y: -box.midY)
+        seal.opacity = 0.9
+        var rng = SeededRandom(string: book.id + style.stamp + "seal")
+        seal.drawLayer { layer in
+            layer.fill(Path(roundedRect: box, cornerRadius: em * 0.1), with: .color(Color(hex: "C23A22")))
+            layer.blendMode = .destinationOut
+            if vertical {
+                let tallest = CGFloat(lines.map(\.count).max() ?? 1)
+                for (c, column) in lines.enumerated() {
+                    let x = box.maxX - pad - em * (CGFloat(c) + 0.5)
+                    let top = pad + em * (tallest - CGFloat(column.count)) / 2
+                    for (r, letter) in column.enumerated() {
+                        var text = layer.resolve(Text(String(letter)).font(font))
+                        text.shading = .color(.black)
+                        layer.draw(text, at: CGPoint(x: x, y: top + em * (CGFloat(r) + 0.5)))
+                    }
+                }
+            } else {
+                for (i, row) in rows.enumerated() {
+                    var text = row
+                    text.shading = .color(.black)
+                    layer.draw(text, at: CGPoint(x: box.midX, y: pad + em * 0.92 * (CGFloat(i) + 0.5)))
+                }
+            }
+            // Where the ink was thin the paper shows through as a fine grain, more so away from
+            // the top left and along the edges.
+            for _ in 0..<Int(box.width * box.height / (em * em) * 260) {
+                let p = CGPoint(x: .random(in: box.minX...box.maxX, using: &rng), y: .random(in: box.minY...box.maxY, using: &rng))
+                let edge = min(p.x - box.minX, box.maxX - p.x, p.y - box.minY, box.maxY - p.y) / em
+                let thin = 0.1 + 0.25 * (p.x / box.width + p.y / box.height) + (edge < 0.08 ? 0.5 : 0)
+                guard CGFloat.random(in: 0...1, using: &rng) < thin else { continue }
+                let r = em * .random(in: 0.006...0.022, using: &rng)
+                layer.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
+                           with: .color(.black.opacity(.random(in: 0.25...0.8, using: &rng))))
+            }
         }
     }
 

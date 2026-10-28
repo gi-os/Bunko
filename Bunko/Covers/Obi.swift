@@ -67,7 +67,8 @@ struct ObiView: View {
     }
 }
 
-/// A cover that has been read: rubbed corners, a thumb-soft outer edge, a few creases. It grows
+/// A cover that has been read: rubbed corners, a thumb-soft outer edge, a few creases, a spine
+/// faded by the light and, once it's well read, the head corner turned down. It grows
 /// with the pages read, so a loved book looks it.
 struct WearOverlay: View {
     let wear: Double
@@ -104,7 +105,38 @@ struct WearOverlay: View {
                 ctx.stroke(crease, with: .color(.black.opacity(0.12 * w)), lineWidth: 0.8)
                 ctx.stroke(crease.offsetBy(dx: 0, dy: 1), with: .color(.white.opacity(0.2 * w)), lineWidth: 0.8)
             }
+            // The spine, faded by the light on the shelf.
+            let spineX = spineOnRight ? size.width : 0
+            let fade = size.width * 0.16
+            ctx.fill(Path(CGRect(x: spineOnRight ? size.width - fade : 0, y: 0, width: fade, height: size.height)),
+                     with: .linearGradient(Gradient(colors: [.white.opacity(0.24 * w), .white.opacity(0.08 * w), .clear]),
+                                           startPoint: CGPoint(x: spineX, y: 0),
+                                           endPoint: CGPoint(x: spineOnRight ? size.width - fade : fade, y: 0)))
+            // A dog-ear: the head corner away from the spine folded over, the board showing beneath.
+            let fold = size.width * Self.dogEar(wear)
+            if fold > 0 {
+                let edge: CGFloat = spineOnRight ? 0 : size.width
+                let inward: CGFloat = spineOnRight ? 1 : -1
+                let onHead = CGPoint(x: edge + inward * fold, y: 0)
+                let onSide = CGPoint(x: edge, y: fold)
+                let tip = CGPoint(x: edge + inward * fold, y: fold)
+                var gone = Path()
+                gone.addLines([onHead, CGPoint(x: edge, y: 0), onSide])
+                ctx.fill(gone, with: .color(Color(hex: "E9E1CF")))
+                var flap = Path()
+                flap.addLines([onHead, onSide, tip])
+                var lifted = ctx
+                lifted.addFilter(.shadow(color: .black.opacity(0.3), radius: fold * 0.1, x: inward * fold * 0.04, y: fold * 0.05))
+                lifted.fill(flap, with: .linearGradient(Gradient(colors: [Color(hex: "F4EFE4"), Color(hex: "D9D0BE")]),
+                                                        startPoint: CGPoint(x: (onHead.x + onSide.x) / 2, y: fold / 2), endPoint: tip))
+            }
         }
         .allowsHitTesting(false)
+    }
+
+    /// How far the dog-ear reaches along the head, as a share of the cover's width: none until a
+    /// book is well read, then growing.
+    static func dogEar(_ wear: Double) -> CGFloat {
+        wear < 0.4 ? 0 : 0.05 + 0.07 * CGFloat((min(wear, 1) - 0.4) / 0.6)
     }
 }
