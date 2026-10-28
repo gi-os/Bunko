@@ -124,7 +124,7 @@ struct ClosedBookView: View {
     @State private var swing: Double = 0
     @State private var showsHint = true
 
-    private var japanese: Bool { model.book.rightToLeft || model.book.language.hasPrefix("ja") }
+    private var japanese: Bool { model.book.printsJapanese }
 
     /// How much of the page block shows past the cover, in points.
     private let depth: CGFloat = 10

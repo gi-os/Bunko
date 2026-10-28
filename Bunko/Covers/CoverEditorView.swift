@@ -124,7 +124,8 @@ struct CoverEditorView: View {
                                 .overlay(RoundedRectangle(cornerRadius: 3)
                                     .stroke(kind == style.house && !style.wrapped ? Color.accentColor : .clear, lineWidth: 2.5)
                                     .padding(-3))
-                            Text(kind?.name ?? "Auto · \(House.of(book).imprint.name)").font(.caption2)
+                            Text(kind?.name(english: !book.printsJapanese) ?? "Auto · \(House.of(book).imprint.name(english: !book.printsJapanese))")
+                                .font(.caption2)
                             Text(kind?.technique ?? "Picked for the book").font(.caption2).foregroundStyle(.secondary)
                         }
                         .lineLimit(1)
@@ -138,7 +139,7 @@ struct CoverEditorView: View {
 
     /// Every kind of obi on this book, wearing what it would say now (or a sample).
     private var obis: some View {
-        let japanese = book.rightToLeft || book.language.hasPrefix("ja")
+        let japanese = book.printsJapanese
         let obi = Obi.closed(sync.progress(for: book), japanese: japanese) ?? .sample(japanese: japanese)
         let kinds: [ObiStyle?] = [nil] + ObiStyle.allCases.map(Optional.some)
         return VStack(alignment: .leading, spacing: 12) {

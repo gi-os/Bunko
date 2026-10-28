@@ -164,7 +164,7 @@ extension HouseCover {
                     .frame(height: w * 0.07)
                     .padding(.horizontal, w * 0.12)
                 Spacer()
-                gold.mask(Text(house.imprint.colophon).font(Typesetter.swiftUIFont(.mincho, size: w * 0.06, bold: true)))
+                gold.mask(colophonText(size: w * 0.06))
                     .frame(width: w * 0.1, height: w * 0.1)
                     .padding(.bottom, h * 0.08)
             }
@@ -288,7 +288,7 @@ extension HouseCover {
         return ZStack {
             Color(hex: "F2EDE1")
             VStack(spacing: h * 0.022) {
-                Text(house.imprint.name).font(Typesetter.swiftUIFont(.mincho, size: w * 0.042)).tracking(w * 0.03).foregroundStyle(ink)
+                imprintLine(size: w * 0.042, w: w).foregroundStyle(ink)
                 rule(0.008)
                 rule(0.003)
                 Spacer()
@@ -306,9 +306,11 @@ extension HouseCover {
                 shelfCode(ink, w: w)
                 rule(0.003)
                 rule(0.008)
-                Text(house.imprint.colophon).font(Typesetter.swiftUIFont(.mincho, size: w * 0.05, bold: true)).foregroundStyle(colour)
+                colophonText(size: w * 0.05).foregroundStyle(colour)
             }
             .padding(w * 0.1)
+            // The head line clears the camera when the book fills the screen.
+            .padding(.top, h * 0.04)
         }
     }
 
