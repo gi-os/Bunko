@@ -22,6 +22,9 @@ struct Book: Codable, Identifiable, Hashable {
     /// The series it belongs to and its place in it, from the book's own metadata.
     var series: String?
     var seriesIndex: Double?
+    /// Which of its possible looks it wears: set by the shelf so no two books' covers match
+    /// (`Look.assign`). Kept on this device only.
+    var look: Int?
 
     /// A volume of a series: its name and number.
     struct Volume: Equatable {
@@ -54,7 +57,7 @@ struct Book: Codable, Identifiable, Hashable {
 
     /// What picks its automatic design: the series if it's in one, so the set looks alike.
     var designKey: String {
-        volume.map { "series:" + $0.series.lowercased() } ?? id
+        (volume.map { "series:" + $0.series.lowercased() } ?? id) + (look.map { $0 > 0 ? "#\($0)" : "" } ?? "")
     }
 
     /// A series and number read off a title: "Name, Vol. 3", "Name Book 2", "Name #4", "Name (3)",

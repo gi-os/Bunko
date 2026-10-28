@@ -156,22 +156,25 @@ struct House: Equatable {
         }
     }
 
-    static let authorColours = ["8E2F2A", "2F4F7F", "3F6B4A", "9A6A22", "5B3F73", "2E2B28", "A84E64", "3E6F78"]
-
     var imprint: Imprint
     var colour: String
+    /// Which of the house's three layouts this book was printed in.
+    var variant = 0
     var shelfCode: String
     var price: Int
 
     /// The book's house: the one chosen for it, or one picked by its series or itself.
     static func of(_ book: Book, imprint chosen: Imprint? = nil) -> House {
         let author = book.author.trimmingCharacters(in: .whitespaces)
-        // A series shares its house and colour; its volumes are numbered in the shelf code.
-        let byDesign = hash(book.designKey), byBook = hash(book.id)
+        // The book's look picks its house, colour and layout (a series shares one); the shelf code
+        // numbers the author and, in a series, the volume.
+        let look = Look.of(book)
+        let byBook = hash(book.id)
         let byAuthor = hash(book.volume?.series ?? (author.isEmpty ? book.title : author))
         let number = book.volume?.index.map { Int($0) } ?? byBook % 40 + 1
-        return House(imprint: chosen ?? Imprint.allCases[byDesign % Imprint.allCases.count],
-                     colour: authorColours[byAuthor % authorColours.count],
+        return House(imprint: chosen ?? look.imprint,
+                     colour: look.colour,
+                     variant: look.variant,
                      shelfCode: "\(initial(of: author.isEmpty ? book.title : author)) \(byAuthor % 60 + 1) \(number)",
                      price: 400 + hash(book.id + "¥") % 50 * 10)
     }
@@ -261,7 +264,7 @@ struct HouseCover: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     shelfCode(cream, w: w).padding(w * 0.04)
                 }
-                .frame(height: h * 0.52)
+                .frame(height: h * [0.52, 0.42, 0.62][house.variant % 3])
                 author(colour, w: w).padding(.top, h * 0.05)
                 Spacer()
                 foot(colour, w: w)
@@ -270,8 +273,14 @@ struct HouseCover: View {
         case .tsukikage:
             ZStack {
                 colour
-                Rectangle().stroke(cream.opacity(0.8), lineWidth: max(0.5, w * 0.006)).padding(w * 0.05)
-                Rectangle().stroke(cream.opacity(0.8), lineWidth: max(0.5, w * 0.003)).padding(w * 0.068)
+                // Three frames the house has used: double, a single heavy rule, rounded.
+                RoundedRectangle(cornerRadius: house.variant == 2 ? w * 0.05 : 0)
+                    .stroke(cream.opacity(0.8), lineWidth: max(0.5, w * (house.variant == 1 ? 0.012 : 0.006)))
+                    .padding(w * [0.05, 0.045, 0.06][house.variant % 3])
+                if house.variant != 1 {
+                    RoundedRectangle(cornerRadius: house.variant == 2 ? w * 0.04 : 0)
+                        .stroke(cream.opacity(0.8), lineWidth: max(0.5, w * 0.003)).padding(w * (house.variant == 2 ? 0.078 : 0.068))
+                }
                 VStack(spacing: h * 0.03) {
                     shelfCode(cream, w: w).frame(maxWidth: .infinity, alignment: vertical ? .leading : .trailing)
                     title(cream, width: w * 0.7, height: h * 0.42, size: w * 0.105)
@@ -282,8 +291,10 @@ struct HouseCover: View {
                 .padding(w * 0.11)
             }
         case .seirin:
+            // The second layout runs the stripe down the fore-edge instead, on a tinted stock.
+            let stripeFirst = vertical == (house.variant == 1)
             HStack(spacing: 0) {
-                if !vertical { stripe(w: w) }
+                if stripeFirst { stripe(w: w) }
                 VStack(spacing: h * 0.03) {
                     shelfCode(colour, w: w).frame(maxWidth: .infinity, alignment: vertical ? .leading : .trailing)
                     title(ink, width: w * 0.66, height: h * 0.48, size: w * 0.11)
@@ -292,14 +303,15 @@ struct HouseCover: View {
                     foot(colour, w: w)
                 }
                 .padding(w * 0.07)
-                if vertical { stripe(w: w) }
+                if !stripeFirst { stripe(w: w) }
             }
-            .background(cream)
+            .background(house.variant == 1 ? Color(uiColor: UIColor(hex: house.colour).mixed(with: UIColor(cream), 0.78)) : cream)
         case .chidori:
             VStack(spacing: 0) {
                 ZStack {
-                    ArrowFeathers(column: w * 0.14).fill(colour)
-                    .background(cream)
+                    ArrowFeathers(column: w * [0.14, 0.1, 0.19][house.variant % 3]).fill(colour)
+                        .rotationEffect(.degrees(house.variant == 2 ? 180 : 0))
+                        .background(cream)
                     title(ink, width: w * 0.62, height: h * 0.38, size: w * 0.1)
                         .padding(w * 0.05)
                         .background(cream)
@@ -318,6 +330,8 @@ struct HouseCover: View {
                 colour
                 VStack(alignment: vertical ? .trailing : .leading, spacing: h * 0.03) {
                     shelfCode(cream, w: w)
+                    // The title high, low, or midway down.
+                    if house.variant != 0 { Spacer().frame(maxHeight: house.variant == 1 ? .infinity : h * 0.18) }
                     Text(book.title)
                         .font(.system(size: w * 0.13, weight: .black))
                         .foregroundStyle(cream)
@@ -429,7 +443,7 @@ struct HouseCover: View {
         }
         .foregroundStyle(cream)
         .padding(.top, w * 0.1)
-        .frame(width: w * 0.14)
+        .frame(width: w * [0.14, 0.11, 0.2][house.variant % 3])
         .frame(maxHeight: .infinity, alignment: .top)
         .background(colour)
     }

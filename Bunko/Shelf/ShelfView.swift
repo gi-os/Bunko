@@ -148,6 +148,8 @@ struct ShelfView: View {
     private func routeForScreenshots() {
         guard !routed, let screen = UserDefaults.standard.string(forKey: "gios-screen") else { return }
         routed = true
+        // A dozen new books in the covers they came in: nothing dressed, nothing read.
+        if screen == "variety" { seedVarietyForScreenshots(); return }
         if screen == "shelf" || screen == "spines" { seedSeriesForScreenshots() }
         spines = screen == "spines"
         // On the spine shelf, the series stands in its publisher's house dress, one design for all.
@@ -202,6 +204,16 @@ struct ShelfView: View {
     }
 
     /// The shelf's screenshot has a series, added out of order, standing together in order.
+    /// The variety screenshot: a dozen new books, undressed, each in its own automatic cover.
+    private func seedVarietyForScreenshots() {
+        let titles = ["羅生門", "Emma", "こころ", "Dracula", "人間失格", "Frankenstein", "雪国", "Persuasion",
+                      "坊っちゃん", "Moby-Dick", "山月記", "The Time Machine"]
+        for title in titles where !library.books.contains(where: { $0.title == title }) {
+            let text = Script.looksJapanese(title) ? "吾輩は猫である。名前はまだ無い。" : "It was a bright cold day in April."
+            _ = try? library.add(data: Data(text.utf8), fileName: title + ".txt")
+        }
+    }
+
     private func seedSeriesForScreenshots() {
         let text = "猫町の通りを歩いていると、どの窓にも猫がいた。"
         for volume in ["猫町 第2巻", "猫町 第3巻", "猫町 第1巻"] where !library.books.contains(where: { $0.title == volume }) {
