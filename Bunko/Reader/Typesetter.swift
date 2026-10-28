@@ -38,21 +38,27 @@ enum Typesetter {
         Font(font(typeface, size: size, bold: bold) as CTFont)
     }
 
+    /// `language` (BCP 47) picks the hyphenation dictionary for horizontal text; a right-to-left
+    /// one (Arabic, Hebrew…) sets its rows from the right.
     static func typeset(_ content: BookContent, settings: ReaderSettings, typeface: ReaderSettings.Typeface,
-                        vertical: Bool) -> TypesetBook {
+                        vertical: Bool, language: String = "") -> TypesetBook {
         let size = CGFloat(settings.fontSize)
         let ink = settings.paper.ink
+        let rowsRightToLeft = !vertical && Book.writtenRightToLeft(language)
         let body = NSMutableParagraphStyle()
-        body.lineSpacing = size * CGFloat(settings.lineSpacing)
+        // Vertical Japanese wants wide 行間; Western rows read better closer.
+        body.lineSpacing = size * CGFloat(settings.lineSpacing) * (vertical ? 1 : 0.5)
         body.firstLineHeadIndent = size
         body.alignment = .justified
         body.hyphenationFactor = vertical ? 0 : 0.8
+        if rowsRightToLeft { body.baseWritingDirection = .rightToLeft }
         let heading = NSMutableParagraphStyle()
         heading.lineSpacing = body.lineSpacing
         heading.paragraphSpacing = size * 2
         heading.paragraphSpacingBefore = size * 2
         heading.firstLineHeadIndent = vertical ? size * 2 : 0
         heading.alignment = vertical ? .natural : .center
+        if rowsRightToLeft { heading.baseWritingDirection = .rightToLeft }
 
         func attributes(_ font: UIFont, _ style: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
             var attrs: [NSAttributedString.Key: Any] = [
@@ -62,6 +68,7 @@ enum Typesetter {
                 .paragraphStyle: style,
             ]
             if vertical { attrs[NSAttributedString.Key(kCTVerticalFormsAttributeName as String)] = true }
+            if !language.isEmpty { attrs[NSAttributedString.Key(kCTLanguageAttributeName as String)] = language }
             return attrs
         }
         let bodyAttrs = attributes(font(typeface, size: size), body)
@@ -77,7 +84,8 @@ enum Typesetter {
                 text.append(NSAttributedString(string: chapter.title + "\n", attributes: headingAttrs))
             }
             for paragraph in chapter.paragraphs {
-                text.append(NSAttributedString(string: paragraph + "\n", attributes: bodyAttrs))
+                let set = vertical ? paragraph : SmartQuotes.curl(paragraph)
+                text.append(NSAttributedString(string: set + "\n", attributes: bodyAttrs))
             }
         }
         return TypesetBook(text: text, chapterStarts: starts, chapterTitles: titles)
@@ -101,9 +109,14 @@ enum Paginator {
             let setter = CTFramesetterCreateWithAttributedString(chapter)
             var location = 0
             while location < chapter.length {
-                let frame = CTFramesetterCreateFrame(setter, CFRange(location: location, length: 0), path, attrs)
                 // A page always takes at least one character, so a huge glyph can't stall the book.
-                let visible = max(1, CTFrameGetVisibleStringRange(frame).length)
+                let visible: Int
+                if vertical {
+                    let frame = CTFramesetterCreateFrame(setter, CFRange(location: location, length: 0), path, attrs)
+                    visible = max(1, CTFrameGetVisibleStringRange(frame).length)
+                } else {
+                    visible = LineSetter.lay(chapter, typesetter: CTFramesetterGetTypesetter(setter), from: location, size: size).next - location
+                }
                 pages.append(NSRange(location: start + location, length: min(visible, chapter.length - location)))
                 location += visible
             }
@@ -120,5 +133,30 @@ enum Paginator {
             if pages[mid].location <= offset { low = mid } else { high = mid - 1 }
         }
         return low
+    }
+}
+
+/// Typewriter quotes made typographic for horizontal (Western) text: “ ” ‘ ’, an apostrophe
+/// inside a word. One character for one, so reading positions don't move.
+enum SmartQuotes {
+    static func curl(_ text: String) -> String {
+        guard text.contains("\"") || text.contains("'") else { return text }
+        var out = ""
+        out.reserveCapacity(text.utf16.count)
+        var previous: Character?
+        for character in text {
+            switch character {
+            case "\"": out.append(opens(after: previous) ? "\u{201C}" : "\u{201D}")
+            case "'": out.append(opens(after: previous) ? "\u{2018}" : "\u{2019}")
+            default: out.append(character)
+            }
+            previous = character
+        }
+        return out
+    }
+
+    private static func opens(after previous: Character?) -> Bool {
+        guard let previous else { return true }
+        return previous.isWhitespace || "([{\u{2014}\u{2013}-/\u{201C}\u{2018}".contains(previous)
     }
 }

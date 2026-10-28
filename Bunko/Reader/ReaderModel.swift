@@ -33,6 +33,7 @@ final class ReaderModel {
 
     @ObservationIgnored private var content: BookContent?
     @ObservationIgnored private var setters: [Int: CTFramesetter] = [:]
+    @ObservationIgnored private var chapterTexts: [Int: NSAttributedString] = [:]
     @ObservationIgnored private var anchorOffset = 0
     @ObservationIgnored private let library: Library
     @ObservationIgnored private let sync: SyncStore
@@ -72,12 +73,14 @@ final class ReaderModel {
         guard let content else { return }
         let vertical = settings.isVertical(for: book)
         let typeface = settings.face(for: book)
+        let language = book.language.isEmpty ? Script.language(of: content.chapters.first?.paragraphs.prefix(20).joined(separator: "\n") ?? "") : book.language
         let spread = settings.usesSpread(in: size)
         let pageSize = CGSize(width: spread ? size.width / 2 : size.width, height: size.height)
         let textSize = PageGeometry.textSize(page: pageSize)
         let anchor = currentOffset
         let result = await Task.detached(priority: .userInitiated) {
-            let typeset = Typesetter.typeset(content, settings: settings, typeface: typeface, vertical: vertical)
+            let typeset = Typesetter.typeset(content, settings: settings, typeface: typeface, vertical: vertical,
+                                             language: language)
             return (typeset, Paginator.pages(typeset, size: textSize, vertical: vertical))
         }.value
         if Task.isCancelled { return }
@@ -85,9 +88,11 @@ final class ReaderModel {
         typeset = result.0
         pages = result.1
         setters = [:]
+        chapterTexts = [:]
         self.vertical = vertical
         self.settings = settings
-        layout = SpreadLayout(pageCount: pages.count, spread: spread, rightToLeft: vertical)
+        // Bound on the right for columns, and for rows that run right to left (Arabic, Hebrew).
+        layout = SpreadLayout(pageCount: pages.count, spread: spread, rightToLeft: vertical || book.rowsRightToLeft)
         currentPage = Paginator.page(containing: anchor, in: pages)
         pagesVersion += 1
     }
@@ -99,13 +104,15 @@ final class ReaderModel {
         case .right: edges.right
         case .single: layout.bindingOnRight ? edges.left : edges.right
         }
-        var render = PageRender(setter: nil, range: CFRange(location: 0, length: 0), vertical: vertical,
+        var render = PageRender(setter: nil, text: nil, range: CFRange(location: 0, length: 0), vertical: vertical,
                                 paper: settings.paper, side: side, bindingOnRight: layout.bindingOnRight,
                                 edgeFraction: edgeFraction, showsEdges: settings.showsPageEdges)
         guard pages.indices.contains(page), let typeset else { return render }
         let range = pages[page]
         let chapter = typeset.chapter(at: range.location)
         render.setter = framesetter(chapter: chapter, in: typeset)
+        render.text = chapterTexts[chapter]
+        render.face = settings.face(for: book)
         render.range = CFRange(location: range.location - typeset.chapterStarts[chapter], length: range.length)
         render.number = page + 1
         if settings.showsHeader {
@@ -120,8 +127,10 @@ final class ReaderModel {
         if let setter = setters[chapter] { return setter }
         let start = typeset.chapterStarts[chapter]
         let end = chapter + 1 < typeset.chapterStarts.count ? typeset.chapterStarts[chapter + 1] : typeset.text.length
-        let setter = CTFramesetterCreateWithAttributedString(typeset.text.attributedSubstring(from: NSRange(location: start, length: end - start)))
+        let text = typeset.text.attributedSubstring(from: NSRange(location: start, length: end - start))
+        let setter = CTFramesetterCreateWithAttributedString(text)
         setters[chapter] = setter
+        chapterTexts[chapter] = text
         return setter
     }
 

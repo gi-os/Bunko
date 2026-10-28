@@ -69,6 +69,8 @@ struct ReaderSettings: Codable, Equatable {
     var showsPageEdges = true
     var showsHeader = true
     var haptics = true
+    /// Either volume button turns to the next page while a book is open.
+    var volumeTurnsPages = true
 
     /// Width (points) from which "On wide screens" opens the book as a two-page spread: the
     /// iPhone Duo unfolded, or any iPhone on its side.
@@ -85,12 +87,12 @@ struct ReaderSettings: Codable, Equatable {
     }
 
     func face(for book: Book) -> Typeface {
-        book.rightToLeft || book.language.lowercased().hasPrefix("ja") ? typeface : westernTypeface
+        Book.languageCode(book.language) == "ja" || (book.rightToLeft && !book.rowsRightToLeft) ? typeface : westernTypeface
     }
 
     func isVertical(for book: Book) -> Bool {
         switch direction {
-        case .auto: book.rightToLeft
+        case .auto: book.rightToLeft && !book.rowsRightToLeft
         case .vertical: true
         case .horizontal: false
         }
@@ -111,5 +113,6 @@ struct ReaderSettings: Codable, Equatable {
         showsPageEdges = (try? c.decodeIfPresent(Bool.self, forKey: .showsPageEdges)) ?? d.showsPageEdges
         showsHeader = (try? c.decodeIfPresent(Bool.self, forKey: .showsHeader)) ?? d.showsHeader
         haptics = (try? c.decodeIfPresent(Bool.self, forKey: .haptics)) ?? d.haptics
+        volumeTurnsPages = (try? c.decodeIfPresent(Bool.self, forKey: .volumeTurnsPages)) ?? d.volumeTurnsPages
     }
 }

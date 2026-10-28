@@ -8,6 +8,8 @@ struct PageRender {
     /// The chapter's framesetter and this page's range in it: the same layout the paginator
     /// measured, so a page that starts mid-paragraph isn't indented again. nil: a blank page.
     var setter: CTFramesetter?
+    /// The chapter's text, which horizontal pages lay line by line (LineSetter).
+    var text: NSAttributedString?
     var range: CFRange
     var vertical: Bool
     var paper: ReaderSettings.Paper
@@ -19,6 +21,8 @@ struct PageRender {
     var showsEdges: Bool
     var header: String?
     var number: Int?
+    /// The book's typeface, for the running head and page number too.
+    var face: ReaderSettings.Typeface = .mincho
 
     var spineOnRight: Bool {
         switch side {
@@ -58,14 +62,26 @@ final class PageView: UIView {
 
         guard let setter = render.setter else { return }
         let rect = PageGeometry.textRect(page: size, bindingOnRight: render.spineOnRight)
-        let path = CGPath(rect: CGRect(origin: .zero, size: rect.size), transform: nil)
-        let frame = CTFramesetterCreateFrame(setter, render.range, path,
-                                             Paginator.frameAttributes(vertical: render.vertical))
         ctx.saveGState()
         ctx.textMatrix = .identity
-        ctx.translateBy(x: rect.minX, y: rect.maxY)
-        ctx.scaleBy(x: 1, y: -1)
-        CTFrameDraw(frame, ctx)
+        if !render.vertical, let text = render.text {
+            let lines = LineSetter.lay(text, typesetter: CTFramesetterGetTypesetter(setter), from: render.range.location,
+                                       limit: render.range.location + render.range.length, size: rect.size).lines
+            for line in lines {
+                ctx.saveGState()
+                ctx.translateBy(x: rect.minX + line.origin.x, y: rect.minY + line.origin.y)
+                ctx.scaleBy(x: 1, y: -1)
+                ctx.textPosition = .zero
+                CTLineDraw(line.line, ctx)
+                ctx.restoreGState()
+            }
+        } else {
+            let path = CGPath(rect: CGRect(origin: .zero, size: rect.size), transform: nil)
+            let frame = CTFramesetterCreateFrame(setter, render.range, path, Paginator.frameAttributes(vertical: render.vertical))
+            ctx.translateBy(x: rect.minX, y: rect.maxY)
+            ctx.scaleBy(x: 1, y: -1)
+            CTFrameDraw(frame, ctx)
+        }
         ctx.restoreGState()
 
         drawFolio(size: size, render: render)
@@ -98,29 +114,32 @@ final class PageView: UIView {
         }
     }
 
-    /// The running head (柱) and page number (ノンブル), on the outer side.
+    /// The running head (柱) and page number (ノンブル), on the outer side, in the book's own
+    /// typeface. The head sits just above the text, clear of the Dynamic Island, and a long one
+    /// is set smaller rather than cut short.
     private func drawFolio(size: CGSize, render: PageRender) {
         let m = PageGeometry.margins(page: size)
         let outerOnRight = !render.spineOnRight
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: Typesetter.font(.mincho, size: 10),
-            .foregroundColor: render.paper.faint,
-        ]
         let edge: CGFloat = 34
+        func attributes(_ points: CGFloat) -> [NSAttributedString.Key: Any] {
+            [.font: Typesetter.font(render.face, size: points), .foregroundColor: render.paper.faint]
+        }
         if let header = render.header, !header.isEmpty {
-            let maxWidth = size.width * 0.38
             let text = NSString(string: header)
-            var box = text.boundingRect(with: CGSize(width: maxWidth, height: 14), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attrs, context: nil)
-            box.size.width = min(box.width, maxWidth)
-            let x = outerOnRight ? size.width - edge - box.width : edge
-            text.draw(with: CGRect(x: x, y: m.top * 0.5, width: box.width, height: 14),
-                      options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attrs, context: nil)
+            let room = size.width * 0.6
+            var points: CGFloat = 10
+            while points > 7, text.size(withAttributes: attributes(points)).width > room { points -= 0.5 }
+            let box = text.size(withAttributes: attributes(points))
+            if box.width <= room {
+                let x = outerOnRight ? size.width - edge - box.width : edge
+                text.draw(at: CGPoint(x: x, y: m.top - 12 - box.height), withAttributes: attributes(points))
+            }
         }
         if let number = render.number {
             let text = NSString(string: "\(number)")
-            let width = text.size(withAttributes: attrs).width
+            let width = text.size(withAttributes: attributes(10)).width
             let x = outerOnRight ? size.width - edge - width : edge
-            text.draw(at: CGPoint(x: x, y: size.height - m.bottom * 0.55), withAttributes: attrs)
+            text.draw(at: CGPoint(x: x, y: size.height - m.bottom * 0.55), withAttributes: attributes(10))
         }
     }
 }
@@ -130,13 +149,10 @@ final class UnitController: UIViewController {
     let unit: Int
     private let pages: [(page: Int, side: PageRender.Side)]
     private let pageViews: [PageView]
-    /// Inside a mirrored page turner (a right-bound single page): drawn mirrored back, to read true.
-    private let mirrored: Bool
 
-    init(unit: Int, pages: [(page: Int, side: PageRender.Side)], model: ReaderModel, mirrored: Bool = false) {
+    init(unit: Int, pages: [(page: Int, side: PageRender.Side)], model: ReaderModel) {
         self.unit = unit
         self.pages = pages
-        self.mirrored = mirrored
         pageViews = pages.map { _ in PageView(frame: .zero) }
         super.init(nibName: nil, bundle: nil)
         refresh(with: model)
@@ -155,7 +171,6 @@ final class UnitController: UIViewController {
         stack.distribution = .fillEqually
         stack.frame = view.bounds
         stack.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        if mirrored { stack.transform = CGAffineTransform(scaleX: -1, y: 1) }
         view.addSubview(stack)
     }
 }

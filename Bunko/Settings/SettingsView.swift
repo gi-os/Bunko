@@ -76,6 +76,7 @@ struct SettingsView: View {
                     Toggle("Page edges", isOn: settings.showsPageEdges)
                     Toggle("Running head", isOn: settings.showsHeader)
                     Toggle("Haptics", isOn: settings.haptics)
+                    Toggle("Volume buttons turn pages", isOn: settings.volumeTurnsPages)
                 }
 
                 Section {
