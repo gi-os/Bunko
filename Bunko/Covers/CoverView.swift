@@ -36,7 +36,7 @@ struct CoverView: View {
                 .overlay(Image(uiImage: original).resizable().scaledToFill())
                 .clipped()
         } else {
-            PlainCover(book: book, large: large)
+            HouseCover(book: book, large: large)
         }
     }
 }
@@ -58,12 +58,11 @@ struct PaperCover: View {
             var rng = SeededRandom(string: book.id + style.paper.rawValue)
             drawTexture(&ctx, size: size, rng: &rng, base: Color(uiColor: base), ink: ink)
 
-            // The flaps fold round the boards a little in from each edge; the spine is shaded.
+            // The paper folds round the spine a little in from that edge, and the spine is shaded.
             let spineOnRight = book.rightToLeft
-            for x in [size.width * 0.045, size.width * 0.955] {
-                ctx.fill(Path(CGRect(x: x, y: 0, width: 0.8 * unit, height: size.height)), with: .color(.black.opacity(0.10)))
-                ctx.fill(Path(CGRect(x: x + 0.8 * unit, y: 0, width: 0.8 * unit, height: size.height)), with: .color(.white.opacity(0.12)))
-            }
+            let fold = size.width * (spineOnRight ? 0.955 : 0.045)
+            ctx.fill(Path(CGRect(x: fold, y: 0, width: 0.8 * unit, height: size.height)), with: .color(.black.opacity(0.10)))
+            ctx.fill(Path(CGRect(x: fold + 0.8 * unit, y: 0, width: 0.8 * unit, height: size.height)), with: .color(.white.opacity(0.12)))
             let spineWidth = size.width * 0.07
             let spine = CGRect(x: spineOnRight ? size.width - spineWidth : 0, y: 0, width: spineWidth, height: size.height)
             ctx.fill(Path(spine), with: .linearGradient(
@@ -175,36 +174,90 @@ struct PaperCover: View {
         ctx.stroke(lines, with: .color(ink.opacity(0.32)), lineWidth: max(0.5, a * 0.022))
     }
 
-    /// The title slip: up near the head, on the side away from the spine.
+    /// The title slip: up near the head, on the side away from the spine. The whole title always
+    /// fits: a vertical one shrinks, then runs on into a second column (read right to left); a
+    /// horizontal one wraps, then shrinks.
     private func drawLabel(_ ctx: inout GraphicsContext, size: CGSize, unit: CGFloat) {
         let fontSize = max(9, size.width * 0.075)
         let vertical = book.rightToLeft
         let paper = Color(hex: "F7F2E6")
         let inkColor = Color(hex: "2A241E")
         if vertical {
-            let width = fontSize * 1.9
-            let rect = CGRect(x: size.width * 0.16, y: size.height * 0.07, width: width, height: size.height * 0.55)
+            let chars = Array(book.title)
+            let height = size.height * 0.55
+            let (columns, glyph) = Self.verticalSlip(count: chars.count, base: fontSize, height: height)
+            let column = glyph * 1.15
+            let rect = CGRect(x: size.width * 0.16, y: size.height * 0.07, width: glyph * 1.9 + column * CGFloat(columns - 1), height: height)
             ctx.fill(Path(rect), with: .color(paper))
             ctx.stroke(Path(rect.insetBy(dx: 2 * unit, dy: 2 * unit)), with: .color(inkColor.opacity(0.35)), lineWidth: 0.6 * unit)
-            let maxChars = Int((rect.height - fontSize) / (fontSize * 1.08))
-            let chars = Array(book.title.prefix(max(1, maxChars)))
+            let perColumn = (chars.count + columns - 1) / columns
             for (i, ch) in chars.enumerated() {
-                ctx.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: fontSize, bold: true)).foregroundColor(inkColor),
-                         at: CGPoint(x: rect.midX, y: rect.minY + fontSize * 0.9 + CGFloat(i) * fontSize * 1.08))
+                let c = CGFloat(i / perColumn), row = CGFloat(i % perColumn)
+                ctx.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: glyph, bold: true)).foregroundColor(inkColor),
+                         at: CGPoint(x: rect.maxX - glyph * 0.95 - c * column, y: rect.minY + glyph * 0.9 + row * glyph * 1.08))
             }
         } else {
             let rect = CGRect(x: size.width * 0.14, y: size.height * 0.1, width: size.width * 0.72, height: size.height * 0.22)
             ctx.fill(Path(rect), with: .color(paper))
             ctx.stroke(Path(rect.insetBy(dx: 2 * unit, dy: 2 * unit)), with: .color(inkColor.opacity(0.35)), lineWidth: 0.6 * unit)
-            let title = Text(book.title).font(Typesetter.swiftUIFont(.serif, size: fontSize, bold: true)).foregroundColor(inkColor)
-            var resolved = ctx.resolve(title)
-            resolved.shading = .color(inkColor)
-            ctx.draw(resolved, in: rect.insetBy(dx: 6 * unit, dy: 5 * unit).offsetBy(dx: 0, dy: 0))
+            let byline = book.author.isEmpty ? 0 : fontSize * 0.95
+            let room = CGRect(x: rect.minX + 6 * unit, y: rect.minY + 5 * unit,
+                              width: rect.width - 12 * unit, height: rect.height - 10 * unit - byline)
+            let (lines, lineHeight) = Self.setTitle(book.title, ctx: ctx, width: room.width, height: room.height, base: fontSize)
+            let top = room.midY - lineHeight * CGFloat(lines.count) / 2
+            for (i, line) in lines.enumerated() {
+                var line = line
+                line.shading = .color(inkColor)
+                ctx.draw(line, at: CGPoint(x: room.midX, y: top + lineHeight * (CGFloat(i) + 0.5)), anchor: .center)
+            }
             if !book.author.isEmpty {
-                ctx.draw(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6)).foregroundColor(inkColor.opacity(0.7)),
-                         at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
+                // The author too, shrunk rather than cut.
+                var author = ctx.resolve(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6)))
+                let wide = author.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
+                if wide > room.width {
+                    author = ctx.resolve(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6 * room.width / wide)))
+                }
+                author.shading = .color(inkColor.opacity(0.7))
+                ctx.draw(author, at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
             }
         }
+    }
+
+    /// A horizontal title in centred lines, broken between words, at the biggest size from `base`
+    /// down (to a third) at which every word fits the width and every line the height.
+    static func setTitle(_ title: String, ctx: GraphicsContext, width: CGFloat, height: CGFloat,
+                         base: CGFloat) -> (lines: [GraphicsContext.ResolvedText], lineHeight: CGFloat) {
+        var size = base
+        while true {
+            let font = Typesetter.swiftUIFont(.serif, size: size, bold: true)
+            func measure(_ text: String) -> CGFloat {
+                ctx.resolve(Text(text).font(font)).measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).width
+            }
+            var lines: [String] = []
+            var fits = true
+            for word in title.split(separator: " ").map(String.init) {
+                if let last = lines.last, measure(last + " " + word) <= width {
+                    lines[lines.count - 1] = last + " " + word
+                } else {
+                    lines.append(word)
+                    if measure(word) > width { fits = false }
+                }
+            }
+            let lineHeight = size * 1.18
+            if (fits && CGFloat(lines.count) * lineHeight <= height) || size <= base * 0.35 {
+                return (lines.map { ctx.resolve(Text($0).font(font)) }, lineHeight)
+            }
+            size *= 0.92
+        }
+    }
+
+    /// A vertical title slip's columns and type size: one column at the usual size if it fits,
+    /// shrunk to fit if that keeps it readable (62%), else two columns.
+    static func verticalSlip(count: Int, base: CGFloat, height: CGFloat) -> (columns: Int, size: CGFloat) {
+        func fit(_ perColumn: Int) -> CGFloat { min(base, height / (1.08 * CGFloat(max(1, perColumn)) + 0.6)) }
+        let one = fit(count)
+        if one >= base * 0.62 { return (1, one) }
+        return (2, fit((count + 1) / 2))
     }
 
     /// The shop's stamp, inked a little crooked near the foot.
@@ -316,28 +369,5 @@ struct PaperCover: View {
         let first = text[..<split].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
         let second = text[text.index(after: split)...].trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
         return [first, second].filter { !$0.isEmpty }
-    }
-}
-
-/// A book with no cover art of its own, unwrapped: plain cloth with its title.
-struct PlainCover: View {
-    let book: Book
-    var large = false
-
-    var body: some View {
-        let hue = Double(book.id.unicodeScalars.reduce(0) { ($0 &+ Int($1.value)) % 360 }) / 360
-        ZStack {
-            Color(hue: hue, saturation: 0.35, brightness: 0.45)
-            VStack(spacing: large ? 18 : 6) {
-                Text(book.title)
-                    .font(Typesetter.swiftUIFont(.serif, size: large ? 34 : 13, bold: true))
-                    .multilineTextAlignment(.center)
-                if !book.author.isEmpty {
-                    Text(book.author).font(.custom("Literata-Italic", size: large ? 20 : 9))
-                }
-            }
-            .foregroundStyle(.white.opacity(0.9))
-            .padding(large ? 40 : 10)
-        }
     }
 }
