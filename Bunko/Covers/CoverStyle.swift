@@ -3,7 +3,7 @@ import Foundation
 /// A bookshop paper cover (書店カバー) wrapped around a book. Synced through iCloud.
 struct CoverStyle: Codable, Equatable {
     enum Paper: String, Codable, CaseIterable, Identifiable {
-        case kraft, washi, linen, newsprint, indigo, sakura, matcha, basil
+        case kraft, washi, linen, newsprint, indigo, sakura, matcha, basil, seigaiha, asanoha
         var id: Self { self }
 
         var label: String {
@@ -16,6 +16,8 @@ struct CoverStyle: Codable, Equatable {
             case .sakura: "Sakura"
             case .matcha: "Matcha"
             case .basil: "Basil"
+            case .seigaiha: "Waves"
+            case .asanoha: "Hemp leaf"
             }
         }
 
@@ -29,6 +31,8 @@ struct CoverStyle: Codable, Equatable {
             case .sakura: "EACACB"
             case .matcha: "A3AE83"
             case .basil: "5D7B4B"
+            case .seigaiha: "ECE5D4"
+            case .asanoha: "D6B878"
             }
         }
 
@@ -37,17 +41,23 @@ struct CoverStyle: Codable, Equatable {
             case .indigo, .basil: "F3EEE2"
             case .sakura: "8E3B46"
             case .matcha: "3E4A2C"
+            case .seigaiha: "2B4068"
+            case .asanoha: "5A3A1E"
             default: "7A2E26"
             }
         }
 
-        enum Texture { case speckle, fibers, weave, lines }
+        /// Plain papers are textured; patterned ones are printed all over in their ink, the way a
+        /// bookshop prints its wrapping paper: 青海波 (waves) and 麻の葉 (hemp leaf).
+        enum Texture { case speckle, fibers, weave, lines, waves, hemp }
         var texture: Texture {
             switch self {
             case .kraft, .basil, .matcha: .speckle
             case .washi, .indigo, .sakura: .fibers
             case .linen: .weave
             case .newsprint: .lines
+            case .seigaiha: .waves
+            case .asanoha: .hemp
             }
         }
 
@@ -55,9 +65,27 @@ struct CoverStyle: Codable, Equatable {
     }
 
     enum StampShape: String, Codable, CaseIterable, Identifiable {
-        case circle, square, none
+        /// `seal` is a vermilion 朱印, pressed by hand, its letters in columns read right to left.
+        case circle, square, seal, none
         var id: Self { self }
         var label: String { rawValue.capitalized }
+    }
+
+    /// The seal's columns, right to left: one per word when the words are short (BASIL BOOKS ·
+    /// LES), else the letters split evenly into up to three columns of up to six.
+    static func sealColumns(_ stamp: String) -> [String] {
+        let words = stamp.uppercased()
+            .replacingOccurrences(of: "·", with: " ")
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+        guard !words.isEmpty else { return [] }
+        if words.count <= 3, words.allSatisfy({ $0.count <= 6 }) { return words }
+        let letters = Array(words.joined().prefix(18))
+        let columns = (letters.count + 5) / 6
+        let perColumn = (letters.count + columns - 1) / columns
+        return stride(from: 0, to: letters.count, by: perColumn).map {
+            String(letters[$0..<min($0 + perColumn, letters.count)])
+        }
     }
 
     var paper = Paper.kraft
