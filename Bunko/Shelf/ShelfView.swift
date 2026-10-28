@@ -87,7 +87,7 @@ struct ShelfView: View {
             }
             .sheet(item: $dressing) { book in
                 CoverEditorView(book: book, style: sync.cover(for: book),
-                                opensAtObi: UserDefaults.standard.string(forKey: "gios-screen") == "obi")
+                                opensAt: UserDefaults.standard.string(forKey: "gios-screen").flatMap(CoverEditorView.Section.init(rawValue:)))
             }
             .sheet(item: $editingInfo) { book in BookInfoView(book: book) }
             .sheet(isPresented: $showsSettings) { SettingsView() }
@@ -167,7 +167,7 @@ struct ShelfView: View {
         case "reader-en": if let english { open(english, closed: false) }
         case "closed-en": if let english { open(english, closed: true) }
         case "cover": dressing = japanese
-        case "obi": dressing = japanese
+        case "obi", "houses": dressing = japanese
         case "info": editingInfo = japanese
         case "navigator":
             if let japanese {

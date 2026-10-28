@@ -116,6 +116,8 @@ struct CoverStyle: Codable, Equatable {
     var wrapped = true
     /// The kind of obi it wears when there's something to say; nil picks one by the book.
     var obi: ObiStyle?
+    /// The publisher's cover under the paper; nil picks a house by the book (or its series).
+    var house: House.Imprint?
 
     init(paper: Paper = .kraft, stamp: String? = nil) {
         self.paper = paper
@@ -141,5 +143,6 @@ struct CoverStyle: Codable, Equatable {
         showsLabel = (try? c.decodeIfPresent(Bool.self, forKey: .showsLabel)) ?? true
         wrapped = (try? c.decodeIfPresent(Bool.self, forKey: .wrapped)) ?? true
         obi = try? c.decodeIfPresent(ObiStyle.self, forKey: .obi)
+        house = try? c.decodeIfPresent(House.Imprint.self, forKey: .house)
     }
 }
