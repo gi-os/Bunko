@@ -4,14 +4,16 @@ import Foundation
 /// How pages look and turn. Synced through iCloud, so every field decodes with a default: an
 /// older copy from another device (missing newer fields) still loads.
 struct ReaderSettings: Codable, Equatable {
+    /// Bundled typefaces (all SIL Open Font License).
     enum Typeface: String, Codable, CaseIterable, Identifiable {
-        case mincho, gothic, serif
+        case mincho, oldMincho, gothic, serif
         var id: Self { self }
         var label: String {
             switch self {
-            case .mincho: "Mincho 明朝"
-            case .gothic: "Gothic ゴシック"
-            case .serif: "Old Style"
+            case .mincho: "Shippori Mincho しっぽり明朝"
+            case .oldMincho: "Zen Old Mincho 旧明朝"
+            case .gothic: "Zen Kaku Gothic 角ゴシック"
+            case .serif: "Literata"
             }
         }
     }
@@ -52,7 +54,10 @@ struct ReaderSettings: Codable, Equatable {
         }
     }
 
+    /// For Japanese books.
     var typeface = Typeface.mincho
+    /// For everything else.
+    var westernTypeface = Typeface.serif
     var fontSize: Double = 17
     /// Extra space between lines, as a fraction of the font size.
     var lineSpacing: Double = 0.65
@@ -79,6 +84,10 @@ struct ReaderSettings: Codable, Equatable {
         }
     }
 
+    func face(for book: Book) -> Typeface {
+        book.rightToLeft || book.language.lowercased().hasPrefix("ja") ? typeface : westernTypeface
+    }
+
     func isVertical(for book: Book) -> Bool {
         switch direction {
         case .auto: book.rightToLeft
@@ -91,6 +100,7 @@ struct ReaderSettings: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = ReaderSettings()
         typeface = (try? c.decodeIfPresent(Typeface.self, forKey: .typeface)) ?? d.typeface
+        westernTypeface = (try? c.decodeIfPresent(Typeface.self, forKey: .westernTypeface)) ?? d.westernTypeface
         fontSize = (try? c.decodeIfPresent(Double.self, forKey: .fontSize)) ?? d.fontSize
         lineSpacing = (try? c.decodeIfPresent(Double.self, forKey: .lineSpacing)) ?? d.lineSpacing
         direction = (try? c.decodeIfPresent(Direction.self, forKey: .direction)) ?? d.direction

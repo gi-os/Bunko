@@ -23,6 +23,8 @@ final class ReaderModel {
 
     private(set) var currentPage = 0
     private(set) var ribbonOffset = 0
+    /// Position plus reading history (started, finished, pages today); what the obi and the wear show.
+    private(set) var progress: ReadingProgress
     var jump: Jump?
     var isClosed: Bool
     var showsSettings = false
@@ -40,10 +42,10 @@ final class ReaderModel {
         self.library = library
         self.sync = sync
         isClosed = startClosed
-        if let progress = sync.progress(for: book) {
-            anchorOffset = progress.offset
-            ribbonOffset = progress.ribbon
-        }
+        let saved = sync.progress(for: book)
+        progress = saved ?? ReadingProgress(offset: 0, ribbon: 0, fraction: 0)
+        anchorOffset = progress.offset
+        ribbonOffset = progress.ribbon
     }
 
     var currentOffset: Int { pages.indices.contains(currentPage) ? pages[currentPage].location : anchorOffset }
@@ -68,12 +70,13 @@ final class ReaderModel {
         }
         guard let content else { return }
         let vertical = settings.isVertical(for: book)
+        let typeface = settings.face(for: book)
         let spread = settings.usesSpread(in: size)
         let pageSize = CGSize(width: spread ? size.width / 2 : size.width, height: size.height)
         let textSize = PageGeometry.textSize(page: pageSize)
         let anchor = currentOffset
         let result = await Task.detached(priority: .userInitiated) {
-            let typeset = Typesetter.typeset(content, settings: settings, vertical: vertical)
+            let typeset = Typesetter.typeset(content, settings: settings, typeface: typeface, vertical: vertical)
             return (typeset, Paginator.pages(typeset, size: textSize, vertical: vertical))
         }.value
         if Task.isCancelled { return }
@@ -124,6 +127,9 @@ final class ReaderModel {
     /// The page turner settled on a page (a swipe, not a jump).
     func turned(to page: Int) {
         guard page != currentPage, pages.indices.contains(page) else { return }
+        // Pages read forward one turn at a time count toward today and the cover's wear.
+        let forward = page - currentPage
+        if forward > 0 && forward <= 4 { progress.recordTurn(pages: forward) }
         currentPage = page
         if settings.haptics { UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.55) }
         save()
@@ -166,6 +172,10 @@ final class ReaderModel {
 
     private func save() {
         guard !pages.isEmpty else { return }
-        sync.setProgress(ReadingProgress(offset: currentOffset, ribbon: ribbonOffset, fraction: fraction), for: book)
+        progress.offset = currentOffset
+        progress.ribbon = ribbonOffset
+        progress.fraction = fraction
+        if currentPage >= pages.count - 1, progress.finishedAt == nil, progress.pagesRead > 0 { progress.finishedAt = .now }
+        sync.setProgress(progress, for: book)
     }
 }

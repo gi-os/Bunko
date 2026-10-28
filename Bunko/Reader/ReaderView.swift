@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// A book, edge to edge: the screen is the page (or the open spread). No buttons. Pinch to shut
-/// it, then swipe the closed book away; three fingers for settings.
+/// A book, edge to edge: the screen is the page (or the open spread). It opens on its cover; tap
+/// the cover and it swings open on its spine. No buttons. Pinch to shut it, then swipe the closed
+/// book away; three fingers for settings.
 struct ReaderView: View {
     @State private var model: ReaderModel
     @Environment(SyncStore.self) private var sync
@@ -22,6 +23,14 @@ struct ReaderView: View {
         GeometryReader { geo in
             ZStack {
                 Color(uiColor: sync.settings.paper.color)
+                // The first page waits under the cover, so opening reveals it.
+                if let error = model.loadError, !model.isClosed {
+                    Text(error).font(.callout).foregroundStyle(.secondary)
+                        .onTapGesture { dismiss() }
+                } else if !model.pages.isEmpty {
+                    openBook(size: geo.size)
+                        .allowsHitTesting(!model.isClosed)
+                }
                 if model.isClosed {
                     ClosedBookView(model: model, cover: sync.cover(for: model.book),
                                    original: library.originalCover(for: model.book)) {
@@ -29,13 +38,7 @@ struct ReaderView: View {
                         transaction.disablesAnimations = true
                         withTransaction(transaction) { dismiss() }
                     }
-                    .transition(.asymmetric(insertion: .scale(scale: 0.6, anchor: .center).combined(with: .opacity), removal: .opacity))
-                } else if let error = model.loadError {
-                    Text(error).font(.callout).foregroundStyle(.secondary)
-                        .onTapGesture { dismiss() }
-                } else if !model.pages.isEmpty {
-                    openBook(size: geo.size)
-                        .transition(.opacity)
+                    .transition(.asymmetric(insertion: .scale(scale: 0.6, anchor: .center).combined(with: .opacity), removal: .identity))
                 }
             }
             .task(id: LayoutKey(size: geo.size, settings: sync.settings)) {
@@ -104,8 +107,9 @@ struct RibbonShape: Shape {
     }
 }
 
-/// The shut book: its paper cover fills the screen, the ribbon's tail out of the bottom. Swipe it
-/// away to put it back on the shelf, or spread two fingers to open it again.
+/// The shut book: its paper cover fills the screen, the ribbon's tail out of the bottom, the obi
+/// round its foot. Tap (or spread two fingers) and the cover swings open on its spine; swipe it
+/// away to put it back on the shelf.
 struct ClosedBookView: View {
     let model: ReaderModel
     let cover: CoverStyle
@@ -113,30 +117,37 @@ struct ClosedBookView: View {
     let putAway: () -> Void
 
     @State private var drag: CGSize = .zero
-    @State private var opening: CGFloat = 1
+    @State private var swing: Double = 0
     @State private var showsHint = true
+
+    private var japanese: Bool { model.book.rightToLeft || model.book.language.hasPrefix("ja") }
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                CoverView(style: cover, book: model.book, original: original, large: true)
+                CoverView(style: cover, book: model.book, original: original, large: true,
+                          wear: model.progress.wear, obi: Obi.closed(model.progress, japanese: japanese))
                 RibbonView(color: Color(hex: model.settings.ribbonColor), height: 70)
                     .offset(x: model.book.rightToLeft ? geo.size.width * 0.3 : -geo.size.width * 0.3, y: 40)
                 if showsHint {
-                    Text("Swipe away to put it back · Spread to open")
+                    Text("Tap to open · Swipe away to put it back")
                         .font(.caption)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .padding(.bottom, 54)
+                        .frame(maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
                 }
             }
-            .shadow(color: .black.opacity(drag == .zero ? 0 : 0.35), radius: 24)
-            .scaleEffect(opening)
+            // Opening: the cover turns on the spine (the right edge for a Japanese book).
+            .rotation3DEffect(.degrees(swing * (model.book.rightToLeft ? 100 : -100)), axis: (x: 0, y: 1, z: 0),
+                              anchor: model.book.rightToLeft ? .trailing : .leading, perspective: 0.45)
+            .shadow(color: .black.opacity(drag == .zero && swing == 0 ? 0 : 0.35), radius: 24)
             .rotationEffect(.degrees(Double(drag.width) / 30))
             .offset(drag)
+            .contentShape(Rectangle())
+            .onTapGesture { openCover() }
             .gesture(
-                DragGesture()
+                DragGesture(minimumDistance: 12)
                     .onChanged { drag = $0.translation }
                     .onEnded { value in
                         let flung = hypot(value.predictedEndTranslation.width, value.predictedEndTranslation.height)
@@ -154,19 +165,24 @@ struct ClosedBookView: View {
             )
             .simultaneousGesture(
                 MagnifyGesture()
-                    .onChanged { opening = max(1, min(1.3, $0.magnification)) }
-                    .onEnded { value in
-                        if value.magnification > 1.12 {
-                            withAnimation(.easeInOut(duration: 0.35)) { model.open() }
-                        }
-                        withAnimation(.spring(duration: 0.3)) { opening = 1 }
-                    }
+                    .onEnded { value in if value.magnification > 1.12 { openCover() } }
             )
         }
         .ignoresSafeArea()
         .task {
             try? await Task.sleep(for: .seconds(2.5))
             withAnimation(.easeOut(duration: 0.6)) { showsHint = false }
+        }
+    }
+
+    private func openCover() {
+        guard swing == 0, drag == .zero else { return }
+        if model.settings.haptics { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+        withAnimation(.easeIn(duration: 0.45)) { swing = 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { model.open() }
         }
     }
 }

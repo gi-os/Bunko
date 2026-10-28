@@ -22,6 +22,7 @@ struct ShelfView: View {
                     ForEach(library.books) { book in
                         ShelfBook(book: book, cover: sync.cover(for: book), original: library.originalCover(for: book),
                                   progress: sync.progress(for: book), ribbon: Color(hex: sync.settings.ribbonColor))
+                            .animation(.easeInOut(duration: 0.3), value: sync.cover(for: book))
                             .onTapGesture { open(book) }
                             .contextMenu { menu(for: book) }
                     }
@@ -81,7 +82,8 @@ struct ShelfView: View {
         }
     }
 
-    private func open(_ book: Book, closed: Bool = false) {
+    /// A book opens on its cover, the way you pick one up.
+    private func open(_ book: Book, closed: Bool = true) {
         reading = ReaderModel(book: book, library: library, sync: sync, startClosed: closed)
     }
 
@@ -108,7 +110,7 @@ struct ShelfView: View {
         routed = true
         let japanese = library.books.first { $0.rightToLeft } ?? library.books.first
         switch screen {
-        case "reader": if let japanese { open(japanese) }
+        case "reader": if let japanese { open(japanese, closed: false) }
         case "closed": if let japanese { open(japanese, closed: true) }
         case "cover": dressing = japanese
         case "settings": showsSettings = true
@@ -132,7 +134,9 @@ struct ShelfBook: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            CoverView(style: cover, book: book, original: original)
+            // Finished books wear their obi on the shelf.
+            CoverView(style: cover, book: book, original: original, wear: progress?.wear ?? 0,
+                      obi: Obi.finished(progress, japanese: book.rightToLeft || book.language.hasPrefix("ja")))
                 .aspectRatio(105.0 / 148.0, contentMode: .fit)
                 .clipShape(UnevenRoundedRectangle(cornerRadii: .init(
                     topLeading: book.rightToLeft ? 3 : 1, bottomLeading: book.rightToLeft ? 3 : 1,

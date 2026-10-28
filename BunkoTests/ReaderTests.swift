@@ -35,7 +35,7 @@ struct PaginationTests {
             .init(title: "一", paragraphs: Array(repeating: "吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。", count: 40)),
             .init(title: "二", paragraphs: Array(repeating: "Alice was beginning to get very tired of sitting by her sister.", count: 30)),
         ])
-        return Typesetter.typeset(content, settings: ReaderSettings(), vertical: vertical)
+        return Typesetter.typeset(content, settings: ReaderSettings(), typeface: vertical ? .mincho : .serif, vertical: vertical)
     }
 
     @Test(arguments: [true, false])

@@ -1,14 +1,32 @@
 import SwiftUI
 
-/// A book as you see it shut: in its paper cover, or (unwrapped) in its own cover.
+/// A book as you see it shut: in its paper cover, or (unwrapped) in its own cover, worn by how
+/// much it has been read, and in its obi when there's something to say.
 struct CoverView: View {
     let style: CoverStyle
     let book: Book
     var original: UIImage?
     /// Full screen (the closed book) rather than a shelf thumbnail: bigger type and stamp.
     var large = false
+    var wear: Double = 0
+    var obi: Obi?
 
     var body: some View {
+        face
+            .overlay { WearOverlay(wear: wear, seed: book.id, spineOnRight: book.rightToLeft) }
+            .overlay(alignment: .bottom) {
+                if let obi {
+                    GeometryReader { geo in
+                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"))
+                            .frame(height: geo.size.height * (large ? 0.22 : 0.27))
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+    }
+
+    @ViewBuilder private var face: some View {
         if style.wrapped {
             PaperCover(style: style, book: book, large: large)
         } else if let original {
@@ -117,19 +135,19 @@ struct PaperCover: View {
             let maxChars = Int((rect.height - fontSize) / (fontSize * 1.08))
             let chars = Array(book.title.prefix(max(1, maxChars)))
             for (i, ch) in chars.enumerated() {
-                ctx.draw(Text(String(ch)).font(.custom("HiraMinProN-W6", size: fontSize)).foregroundColor(inkColor),
+                ctx.draw(Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: fontSize, bold: true)).foregroundColor(inkColor),
                          at: CGPoint(x: rect.midX, y: rect.minY + fontSize * 0.9 + CGFloat(i) * fontSize * 1.08))
             }
         } else {
             let rect = CGRect(x: size.width * 0.14, y: size.height * 0.1, width: size.width * 0.72, height: size.height * 0.22)
             ctx.fill(Path(rect), with: .color(paper))
             ctx.stroke(Path(rect.insetBy(dx: 2 * unit, dy: 2 * unit)), with: .color(inkColor.opacity(0.35)), lineWidth: 0.6 * unit)
-            let title = Text(book.title).font(.custom("IowanOldStyle-Bold", size: fontSize)).foregroundColor(inkColor)
+            let title = Text(book.title).font(Typesetter.swiftUIFont(.serif, size: fontSize, bold: true)).foregroundColor(inkColor)
             var resolved = ctx.resolve(title)
             resolved.shading = .color(inkColor)
             ctx.draw(resolved, in: rect.insetBy(dx: 6 * unit, dy: 5 * unit).offsetBy(dx: 0, dy: 0))
             if !book.author.isEmpty {
-                ctx.draw(Text(book.author).font(.custom("IowanOldStyle-Italic", size: fontSize * 0.6)).foregroundColor(inkColor.opacity(0.7)),
+                ctx.draw(Text(book.author).font(.custom("Literata-Italic", size: fontSize * 0.6)).foregroundColor(inkColor.opacity(0.7)),
                          at: CGPoint(x: rect.midX, y: rect.maxY - fontSize * 0.7))
             }
         }
@@ -174,10 +192,10 @@ struct PlainCover: View {
             Color(hue: hue, saturation: 0.35, brightness: 0.45)
             VStack(spacing: large ? 18 : 6) {
                 Text(book.title)
-                    .font(.custom("IowanOldStyle-Bold", size: large ? 34 : 13))
+                    .font(Typesetter.swiftUIFont(.serif, size: large ? 34 : 13, bold: true))
                     .multilineTextAlignment(.center)
                 if !book.author.isEmpty {
-                    Text(book.author).font(.custom("IowanOldStyle-Italic", size: large ? 20 : 9))
+                    Text(book.author).font(.custom("Literata-Italic", size: large ? 20 : 9))
                 }
             }
             .foregroundStyle(.white.opacity(0.9))
