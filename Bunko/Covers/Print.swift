@@ -4,6 +4,41 @@ import SwiftUI
 /// Ink doesn't take evenly (it mottles and leaves pinholes where the paper shows), paper has
 /// fibres in it, and light falls across a book in your hands unevenly.
 enum Print {
+    /// Real paper, scanned (CC0, ambientCG; Resources/Textures): the grain maps sit at 50% grey so
+    /// soft light gives any colour the paper's tooth without changing it.
+    enum Grain: CaseIterable {
+        /// Smooth stock: a fine tooth and the odd fleck.
+        case tooth
+        /// Laid, ribbed paper: fine lines in one direction.
+        case laid
+        /// Soft, handled paper (washi): long low creases.
+        case crinkle
+
+        var image: UIImage { Print.texture(file) }
+        private var file: String {
+            switch self {
+            case .tooth: "grain-tooth"
+            case .laid: "grain-laid"
+            case .crinkle: "grain-crinkle"
+            }
+        }
+    }
+
+    /// The bookshop's own kraft wrapping paper, scanned in colour.
+    static var kraft: UIImage { texture("kraft-ribbed") }
+
+    private static var cache: [String: UIImage] = [:]
+    static func texture(_ name: String) -> UIImage {
+        if let image = cache[name] { return image }
+        let image = Bundle.main.path(forResource: name, ofType: "jpg").flatMap(UIImage.init(contentsOfFile:)) ?? UIImage()
+        cache[name] = image
+        return image
+    }
+
+    /// The scan's tile width, as a share of the cover's: real paper's grain is the same size on a
+    /// thumbnail of the book as on the book itself.
+    static func tileScale(coverWidth: CGFloat) -> CGFloat { max(coverWidth, 1) / 360 }
+
     /// Fine light specks, screened over a print: where the ink didn't quite take, the paper shows.
     /// The dark ink breaks up a little; the pale paper hardly changes.
     static let mottle: UIImage = tile(seed: 0x1_4C0) { ctx, size, rng in
@@ -12,28 +47,6 @@ enum Print {
             UIColor.white.withAlphaComponent(.random(in: 0.08...0.32, using: &rng)).setFill()
             ctx.fillEllipse(in: CGRect(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng),
                                        width: r, height: r * .random(in: 0.6...1.4, using: &rng)))
-        }
-    }
-
-    /// Short fibres, light and dark, and a fine tooth: multiplied over everything.
-    static let fibres: UIImage = tile(seed: 0xF1_BE5) { ctx, size, rng in
-        for _ in 0..<2600 {
-            let dark = Bool.random(using: &rng)
-            (dark ? UIColor(white: 0.55, alpha: 1) : UIColor(white: 0.97, alpha: 1))
-                .withAlphaComponent(.random(in: 0.08...0.22, using: &rng)).setFill()
-            let r = CGFloat.random(in: 0.3...0.8, using: &rng)
-            ctx.fillEllipse(in: CGRect(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng), width: r, height: r))
-        }
-        ctx.setLineCap(.round)
-        for _ in 0..<260 {
-            let start = CGPoint(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng))
-            let length = CGFloat.random(in: 3...11, using: &rng), angle = CGFloat.random(in: 0..<(.pi * 2), using: &rng)
-            ctx.setStrokeColor(UIColor(white: .random(in: 0.5...0.75, using: &rng), alpha: .random(in: 0.12...0.3, using: &rng)).cgColor)
-            ctx.setLineWidth(.random(in: 0.25...0.5, using: &rng))
-            ctx.move(to: start)
-            ctx.addQuadCurve(to: CGPoint(x: start.x + cos(angle) * length, y: start.y + sin(angle) * length),
-                             control: CGPoint(x: start.x + cos(angle + 0.5) * length * 0.5, y: start.y + sin(angle + 0.5) * length * 0.5))
-            ctx.strokePath()
         }
     }
 
@@ -47,16 +60,24 @@ enum Print {
 }
 
 extension View {
-    /// Ink on paper: the ink mottled, fibres through it all, the light falling unevenly across it.
-    /// `strength` lowers it for small thumbnails, where the grain would read as dirt.
-    func printed(strength: Double = 1) -> some View {
+    /// Ink on paper: the paper's real grain through everything, the ink thin in places, the light
+    /// falling unevenly across it. `strength` lowers it for small thumbnails, where grain would
+    /// read as dirt.
+    func printed(strength: Double = 1, grain: Print.Grain = .tooth) -> some View {
         self
             // Print is never razor sharp: the ink spreads a hair into the paper.
             .blur(radius: 0.3 * strength)
-            .overlay(Image(uiImage: Print.mottle).resizable(resizingMode: .tile).blendMode(.screen).opacity(0.7 * strength)
+            .overlay(Image(uiImage: Print.mottle).resizable(resizingMode: .tile).blendMode(.screen).opacity(0.6 * strength)
                 .allowsHitTesting(false))
-            .overlay(Image(uiImage: Print.fibres).resizable(resizingMode: .tile).blendMode(.multiply).opacity(0.9 * strength)
-                .allowsHitTesting(false))
+            .overlay(
+                Canvas { ctx, size in
+                    ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                             with: .tiledImage(Image(uiImage: grain.image), scale: Print.tileScale(coverWidth: size.width)))
+                }
+                .blendMode(.softLight)
+                .opacity(strength)
+                .allowsHitTesting(false)
+            )
             .overlay(
                 LinearGradient(stops: [.init(color: .white.opacity(0.10), location: 0), .init(color: .clear, location: 0.45),
                                        .init(color: .black.opacity(0.10), location: 1)],

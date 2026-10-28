@@ -50,6 +50,15 @@ struct CoverStyle: Codable, Equatable {
         /// Plain papers are textured; patterned ones are printed all over in their ink, the way a
         /// bookshop prints its wrapping paper: 青海波 (waves) and 麻の葉 (hemp leaf).
         enum Texture { case speckle, fibers, weave, lines, waves, hemp }
+
+        /// The real paper under it.
+        var grain: Print.Grain {
+            switch self {
+            case .linen, .kraft: .laid
+            case .washi, .sakura, .indigo: .crinkle
+            default: .tooth
+            }
+        }
         var texture: Texture {
             switch self {
             case .kraft, .basil, .matcha: .speckle

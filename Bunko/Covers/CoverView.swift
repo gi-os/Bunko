@@ -31,7 +31,7 @@ struct CoverView: View {
 
     @ViewBuilder private var face: some View {
         if style.wrapped {
-            PaperCover(style: style, book: book, large: large).printed(strength: large ? 1 : 0.75)
+            PaperCover(style: style, book: book, large: large).printed(strength: large ? 1 : 0.75, grain: style.paper.grain)
         } else if let original {
             Color.clear
                 .overlay(Image(uiImage: original).resizable().scaledToFill())
@@ -55,9 +55,14 @@ struct PaperCover: View {
         let unit: CGFloat = large ? 2.4 : 1
         Canvas { ctx, size in
             let rect = CGRect(origin: .zero, size: size)
-            ctx.fill(Path(rect), with: .color(Color(uiColor: base)))
             var rng = SeededRandom(string: book.id + style.paper.rawValue)
-            drawTexture(&ctx, size: size, rng: &rng, base: Color(uiColor: base), ink: ink)
+            if style.paper == .kraft && style.tint == nil {
+                // The real thing: a scan of ribbed kraft wrapping paper.
+                ctx.fill(Path(rect), with: .tiledImage(Image(uiImage: Print.kraft), scale: Print.tileScale(coverWidth: size.width)))
+            } else {
+                ctx.fill(Path(rect), with: .color(Color(uiColor: base)))
+                drawTexture(&ctx, size: size, rng: &rng, base: Color(uiColor: base), ink: ink)
+            }
 
             // The paper folds round the spine a little in from that edge, and the spine is shaded.
             let spineOnRight = book.rightToLeft
@@ -99,15 +104,15 @@ struct PaperCover: View {
         case .speckle, .waves, .hemp:
             if style.paper.texture == .waves { drawWaves(&ctx, size: size, base: base, ink: ink) }
             if style.paper.texture == .hemp { drawHemp(&ctx, size: size, ink: ink) }
-            // Printed papers get a finer grain over the print.
-            for _ in 0..<Int(area / (style.paper.texture == .speckle ? 90 : 180)) {
-                let r = CGFloat.random(in: 0.4...1.6, using: &rng)
+            // The odd inclusion in the pulp; the scanned grain does the rest.
+            for _ in 0..<Int(area / 700) {
+                let r = CGFloat.random(in: 0.4...1.3, using: &rng)
                 let p = CGRect(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng), width: r, height: r)
-                let dark = Bool.random(using: &rng)
-                ctx.fill(Path(ellipseIn: p), with: .color((dark ? Color.black : .white).opacity(.random(in: 0.05...0.16, using: &rng))))
+                ctx.fill(Path(ellipseIn: p), with: .color(Color(hex: "3A2A1A").opacity(.random(in: 0.05...0.14, using: &rng))))
             }
         case .fibers:
-            for _ in 0..<Int(area / 260) {
+            // Washi's long fibres, few and faint: the scanned grain carries the paper itself.
+            for _ in 0..<Int(area / 700) {
                 let start = CGPoint(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng))
                 let length = CGFloat.random(in: 4...18, using: &rng)
                 let angle = CGFloat.random(in: 0..<(.pi * 2), using: &rng)
@@ -117,27 +122,11 @@ struct PaperCover: View {
                     to: CGPoint(x: start.x + cos(angle) * length, y: start.y + sin(angle) * length),
                     control: CGPoint(x: start.x + cos(angle + 0.6) * length * 0.5, y: start.y + sin(angle + 0.6) * length * 0.5))
                 let light = Bool.random(using: &rng)
-                ctx.stroke(fiber, with: .color((light ? Color.white : .black).opacity(.random(in: 0.08...0.22, using: &rng))), lineWidth: 0.6)
+                ctx.stroke(fiber, with: .color((light ? Color.white : .black).opacity(.random(in: 0.05...0.14, using: &rng))), lineWidth: 0.4)
             }
-        case .weave:
-            var y: CGFloat = 0
-            while y < size.height {
-                ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 0.6)), with: .color(.black.opacity(0.05)))
-                y += 2.5
-            }
-            var x: CGFloat = 0
-            while x < size.width {
-                ctx.fill(Path(CGRect(x: x, y: 0, width: 0.6, height: size.height)), with: .color(.white.opacity(0.09)))
-                x += 2.5
-            }
-        case .lines:
-            var y: CGFloat = size.height * 0.08
-            while y < size.height * 0.95 {
-                let inset = CGFloat.random(in: 0...size.width * 0.3, using: &rng)
-                ctx.fill(Path(CGRect(x: size.width * 0.1, y: y, width: size.width * 0.8 - inset, height: 1.2)),
-                         with: .color(.black.opacity(0.06)))
-                y += 5
-            }
+        case .weave, .lines:
+            // Bookcloth and newsprint are all in their scanned grain.
+            break
         }
     }
 
