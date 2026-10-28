@@ -2,10 +2,35 @@ import SwiftUI
 
 /// The paper band (帯) round the foot of a cover. On a finished book it carries the day you
 /// finished it; on the closed book you're reading, how much you read today. Never a goal or a
-/// streak: just what happened.
+/// streak: just what happened. How it's worded and printed depends on its `ObiStyle`.
 struct Obi: Equatable {
     var headline: String
     var detail: String
+    /// A finished book's obi is printed in vermilion, so the shelf shows at a glance what's read.
+    var finished = false
+    /// How far through, for the hairline meter on the obi of a book being read.
+    var fraction: Double?
+    /// The facts the styles word their own way: pages turned in all and today, and for a
+    /// finished book the days it took and the day (yyyy.MM.dd).
+    var pages = 0
+    var today = 0
+    var days = 0
+    var date = ""
+
+    /// The headline cut into runs of digits and the rest: the numbers are set big and in red.
+    static func runs(_ headline: String) -> [(text: String, number: Bool)] {
+        var runs: [(text: String, number: Bool)] = []
+        for ch in headline {
+            // Digits only: 一 and 十 have numeric values too, but they're words here.
+            let number = ch.unicodeScalars.allSatisfy { $0.properties.generalCategory == .decimalNumber }
+            if let last = runs.last, last.number == number {
+                runs[runs.count - 1].text.append(ch)
+            } else {
+                runs.append((String(ch), number))
+            }
+        }
+        return runs
+    }
 
     static func finished(_ progress: ReadingProgress?, japanese: Bool, calendar: Calendar = .current) -> Obi? {
         guard let progress, let finished = progress.finishedAt else { return nil }
@@ -17,8 +42,13 @@ struct Obi: Equatable {
         let date = format.string(from: finished)
         let start = calendar.startOfDay(for: progress.startedAt ?? finished)
         let days = max(1, (calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: finished)).day ?? 0) + 1)
-        if japanese { return Obi(headline: "読了", detail: "\(date)・\(days)日間") }
-        return Obi(headline: "Finished", detail: "\(date) · \(days == 1 ? "in a day" : "in \(days) days")")
+        var obi = japanese
+            ? Obi(headline: "読了", detail: "\(date)・\(days)日間", finished: true)
+            : Obi(headline: "Finished", detail: "\(date) · \(days == 1 ? "in a day" : "in \(days) days")", finished: true)
+        obi.pages = progress.pagesRead
+        obi.days = days
+        obi.date = date
+        return obi
     }
 
     /// The closed book in your hands: finished, or today's reading, or nothing for a book not yet begun.
@@ -28,42 +58,137 @@ struct Obi: Equatable {
         let today = progress.pagesToday(now: now, calendar: calendar)
         guard today > 0 || progress.fraction > 0 else { return nil }
         let percent = Int((progress.fraction * 100).rounded())
-        if japanese {
-            return Obi(headline: today > 0 ? "今日 \(today)ページ" : "続きから", detail: "全体の\(percent)%")
+        var obi = japanese
+            ? Obi(headline: today > 0 ? "今日 \(today)ページ" : "続きから", detail: "全体の\(percent)%", fraction: progress.fraction)
+            : Obi(headline: today > 0 ? "\(today) \(today == 1 ? "page" : "pages") today" : "Pick up where you left off",
+                  detail: "\(percent)% through", fraction: progress.fraction)
+        obi.pages = progress.pagesRead
+        obi.today = today
+        return obi
+    }
+
+    /// What the editor shows on a book with no reading yet.
+    static func sample(japanese: Bool) -> Obi {
+        var progress = ReadingProgress(offset: 0, ribbon: 0, fraction: 0.3)
+        progress.recordTurn(pages: 12)
+        progress.pagesRead = 120
+        return closed(progress, japanese: japanese)!
+    }
+
+    /// The words a style prints. Most print the headline and detail as they are; the others
+    /// say the same facts the way their kind of obi does.
+    func copy(_ style: ObiStyle, japanese: Bool, season: Season) -> ObiCopy {
+        let percent = fraction.map { "\(Int(($0 * 100).rounded()))%" }
+        switch style {
+        case .classic, .noir, .frost, .wide:
+            return ObiCopy(headline: headline, detail: detail)
+        case .milestone:
+            // 「〇万部突破！」, counted in your own pages.
+            guard pages > 0 else { return ObiCopy(headline: headline, detail: detail, badge: percent ?? (japanese ? "読了" : "Read")) }
+            if finished {
+                return ObiCopy(headline: japanese ? "全\(pages)ページ読破!" : "All \(pages) pages read!", detail: detail,
+                               badge: japanese ? "読了" : "Read")
+            }
+            return ObiCopy(headline: japanese ? "累計\(pages)ページ突破!" : "\(pages) pages and counting!",
+                           detail: japanese ? "\(headline)・\(detail)" : "\(headline) · \(detail)", badge: percent)
+        case .award:
+            if finished { return ObiCopy(headline: japanese ? "祝・読了" : "Finished", detail: detail, badge: japanese ? "読了" : "Read") }
+            return ObiCopy(headline: headline, detail: detail, badge: percent)
+        case .quote:
+            // An endorsement, from you: what happened, in your words.
+            if finished {
+                return japanese
+                    ? ObiCopy(headline: "「\(days)日間で読み終えた。」", detail: "—— \(date)のわたし")
+                    : ObiCopy(headline: "“Read it in \(days == 1 ? "a day" : "\(days) days").”", detail: "— me, \(date)")
+            }
+            if today > 0 {
+                return japanese
+                    ? ObiCopy(headline: "「今日は\(today)ページ読んだ。」", detail: "—— 今日のわたし")
+                    : ObiCopy(headline: "“\(today) \(today == 1 ? "page" : "pages") today.”", detail: "— me, today")
+            }
+            return japanese
+                ? ObiCopy(headline: "「全体の\(percent ?? "")まで来た。」", detail: "—— わたし")
+                : ObiCopy(headline: "“\(percent ?? "") of the way in.”", detail: "— me")
+        case .fair:
+            return ObiCopy(headline: headline, detail: detail, label: season.label(japanese: japanese))
         }
-        return Obi(headline: today > 0 ? "\(today) \(today == 1 ? "page" : "pages") today" : "Pick up where you left off",
-                   detail: "\(percent)% through")
     }
 }
 
-struct ObiView: View {
-    let obi: Obi
-    let japanese: Bool
+/// What an obi prints: its headline and detail, a badge (starburst, medal) and a label above.
+struct ObiCopy: Equatable {
+    var headline: String
+    var detail: String
+    var badge: String?
+    var label: String?
+}
 
-    var body: some View {
-        GeometryReader { geo in
-            let h = geo.size.height
-            ZStack {
-                Color(hex: "F4EEDF")
-                Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile)
-                VStack(spacing: h * 0.06) {
-                    Text(obi.headline)
-                        .font(Typesetter.swiftUIFont(japanese ? .mincho : .serif, size: h * 0.30, bold: true))
-                    Text(obi.detail)
-                        .font(Typesetter.swiftUIFont(japanese ? .mincho : .serif, size: h * 0.13))
-                        .tracking(h * 0.01)
-                }
-                .foregroundStyle(Color(hex: "7A2E26"))
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .padding(.horizontal, geo.size.width * 0.08)
-            }
-            // The band sits on the cover: a shadow above, its own fold line below the top edge.
-            .overlay(alignment: .top) { Rectangle().fill(.black.opacity(0.08)).frame(height: max(0.5, h * 0.012)) }
-            .shadow(color: .black.opacity(0.25), radius: h * 0.03, y: -h * 0.01)
+/// The kinds of obi a Japanese bookshop is full of, each carrying your reading in its own idiom.
+enum ObiStyle: String, Codable, CaseIterable, Identifiable {
+    /// 白帯: cream with a vermilion double rule.
+    case classic
+    /// 突破帯: loud yellow, 「累計〇ページ突破!」 and a starburst.
+    case milestone
+    /// 受賞帯: prize red with gold rules and a medal.
+    case award
+    /// 推薦帯: an endorsement in 「」, signed by you.
+    case quote
+    /// 黒帯: black and gold, the premium edition.
+    case noir
+    /// フェア帯: a publisher's seasonal fair, its cat and the 応募券 to cut out.
+    case fair
+    /// 半透明帯: translucent, the cover showing through.
+    case frost
+    /// 全面帯: half the cover, the title repeated, like a film tie-in.
+    case wide
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .classic: "Classic"
+        case .milestone: "Milestone"
+        case .award: "Award"
+        case .quote: "Quote"
+        case .noir: "Noir"
+        case .fair: "Fair"
+        case .frost: "Frosted"
+        case .wide: "Wide"
         }
-        .accessibilityElement()
-        .accessibilityLabel("\(obi.headline), \(obi.detail)")
+    }
+
+    /// The band's height as a share of the cover's: the full-screen closed book, or a thumbnail.
+    func height(large: Bool) -> CGFloat {
+        self == .wide ? (large ? 0.42 : 0.5) : (large ? 0.22 : 0.27)
+    }
+
+    /// A book nobody has picked an obi for: one per book, by its ID, so the shelf is varied.
+    static func automatic(for bookID: String) -> ObiStyle {
+        let pick = bookID.unicodeScalars.reduce(7) { ($0 &* 33 &+ Int($1.value)) & 0xFFFF }
+        return allCases[pick % allCases.count]
+    }
+}
+
+/// The fair obi follows the season, the way the publishers' summer and autumn fairs do.
+enum Season: CaseIterable {
+    case spring, summer, autumn, winter
+
+    static func of(_ date: Date, calendar: Calendar = .current) -> Season {
+        switch calendar.component(.month, from: date) {
+        case 3...5: .spring
+        case 6...8: .summer
+        case 9...11: .autumn
+        default: .winter
+        }
+    }
+
+    func label(japanese: Bool) -> String {
+        switch self {
+        case .spring: japanese ? "春の一冊" : "Spring reading"
+        case .summer: japanese ? "夏の一冊" : "Summer reading"
+        case .autumn: japanese ? "読書の秋" : "Autumn reading"
+        case .winter: japanese ? "冬の一冊" : "Winter reading"
+        }
     }
 }
 

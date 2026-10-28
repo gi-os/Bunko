@@ -16,9 +16,11 @@ struct CoverView: View {
             .overlay { WearOverlay(wear: wear, seed: book.id, spineOnRight: book.rightToLeft) }
             .overlay(alignment: .bottom) {
                 if let obi {
+                    let kind = style.obi ?? .automatic(for: book.id)
                     GeometryReader { geo in
-                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"))
-                            .frame(height: geo.size.height * (large ? 0.22 : 0.27))
+                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"),
+                                spineOnRight: book.rightToLeft, style: kind, title: book.title)
+                            .frame(height: geo.size.height * kind.height(large: large))
                             .frame(maxHeight: .infinity, alignment: .bottom)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))

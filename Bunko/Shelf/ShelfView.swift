@@ -72,7 +72,8 @@ struct ShelfView: View {
                 Text(problem ?? "")
             }
             .sheet(item: $dressing) { book in
-                CoverEditorView(book: book, style: sync.cover(for: book))
+                CoverEditorView(book: book, style: sync.cover(for: book),
+                                opensAtObi: UserDefaults.standard.string(forKey: "gios-screen") == "obi")
             }
             .sheet(isPresented: $showsSettings) { SettingsView() }
             .sheet(isPresented: $showsShops) { NavigationStack { ShopsView() } }
@@ -129,6 +130,7 @@ struct ShelfView: View {
         case "reader-en": if let english { open(english, closed: false) }
         case "closed-en": if let english { open(english, closed: true) }
         case "cover": dressing = japanese
+        case "obi": dressing = japanese
         case "settings": showsSettings = true
         case "shops": showsShops = true
         default: break
@@ -187,7 +189,8 @@ struct ShelfBook: View {
                     topLeading: book.rightToLeft ? 3 : 1, bottomLeading: book.rightToLeft ? 3 : 1,
                     bottomTrailing: book.rightToLeft ? 1 : 3, topTrailing: book.rightToLeft ? 1 : 3)))
                 .shadow(color: .black.opacity(0.28), radius: 6, x: 0, y: 5)
-                .overlay(alignment: book.rightToLeft ? .bottomLeading : .bottomTrailing) {
+                // Behind the book, so the ribbon's tail hangs out from under it rather than across the obi.
+                .background(alignment: book.rightToLeft ? .bottomLeading : .bottomTrailing) {
                     if let progress, progress.fraction > 0 {
                         RibbonView(color: ribbon, height: 26)
                             .frame(width: 8)
