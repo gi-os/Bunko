@@ -3,8 +3,8 @@ import SwiftUI
 import UIKit
 
 /// The pages, turned by UIPageViewController: a curling leaf (or a slide), a two-page spread
-/// bound in the middle on a wide screen, bound on the right for a right-to-left book. Three
-/// fingers tap for settings; two fingers pinch the book shut.
+/// bound in the middle on a wide screen, bound on the right for a right-to-left book. Two fingers
+/// tap for the chapters and scrubber, three for settings; two fingers pinch the book shut.
 struct PageTurner: UIViewControllerRepresentable {
     let model: ReaderModel
     let curl: Bool
@@ -33,6 +33,10 @@ struct PageTurner: UIViewControllerRepresentable {
         let settingsTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.threeFingerTap))
         settingsTap.numberOfTouchesRequired = 3
         pager.view.addGestureRecognizer(settingsTap)
+        let navigatorTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.twoFingerTap))
+        navigatorTap.numberOfTouchesRequired = 2
+        navigatorTap.require(toFail: settingsTap)
+        pager.view.addGestureRecognizer(navigatorTap)
         let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pinch(_:)))
         pinch.delegate = context.coordinator
         pager.view.addGestureRecognizer(pinch)
@@ -169,6 +173,10 @@ struct PageTurner: UIViewControllerRepresentable {
                     unitController.refresh(with: model)
                 }
             }
+        }
+
+        @objc func twoFingerTap() {
+            withAnimation(.easeOut(duration: 0.25)) { model.showsNavigator.toggle() }
         }
 
         @objc func threeFingerTap() {

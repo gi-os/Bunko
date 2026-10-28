@@ -30,6 +30,8 @@ final class ReaderModel {
     var jump: Jump?
     var isClosed: Bool
     var showsSettings = false
+    /// Two fingers tapped: the chapters and the scrubber are out.
+    var showsNavigator = false
     /// 1 while open; less while two fingers pinch the book shut.
     var squeeze: CGFloat = 1
 
@@ -58,6 +60,10 @@ final class ReaderModel {
     /// The ribbon lies in what's on the screen now (either page of a spread).
     var ribbonIsHere: Bool { layout.spreadIndex(ofPage: ribbonPage) == layout.spreadIndex(ofPage: currentPage) }
     var fraction: Double { layout.pageCount <= 1 ? 0 : Double(currentPage) / Double(layout.pageCount - 1) }
+    var bookMap: BookMap {
+        guard let typeset else { return BookMap(chapters: [], pageCount: pages.count) }
+        return BookMap.make(titles: typeset.chapterTitles, starts: typeset.chapterStarts, pages: pages)
+    }
 
     /// Cuts the book into pages for this screen and these settings. Called again on any change;
     /// the reading position is kept by character, not by page.
