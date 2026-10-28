@@ -1,0 +1,83 @@
+# The Xcode project is generated from this file (xcodegen generate) and never committed.
+# New files under a target's source folder are picked up automatically; Info.plist keys and
+# entitlements go here too, never in the generated files.
+name: Bunko
+options:
+  bundleIdPrefix: com.gios
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    # Automatic signing for running on your own phone from Xcode; CI signs with match instead.
+    DEVELOPMENT_TEAM: J3ZBJXNN9P
+    CODE_SIGN_STYLE: Automatic
+targets:
+  Bunko:
+    type: application
+    platform: iOS
+    sources:
+      - path: Bunko
+    info:
+      path: Bunko/Info.plist
+      properties:
+        CFBundleDisplayName: Bunko
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Bookshops are often plain-HTTP servers at home (Calibre, Calibre-Web, Kavita on a NAS).
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Bunko connects to the book servers you add, like Calibre or Kavita on your home network.
+        # "Open in Bunko" for EPUB and text files from Files, Safari and the share sheet.
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: EPUB book
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [org.idpf.epub-container]
+          - CFBundleTypeName: Plain text
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.plain-text]
+        ITSAppUsesNonExemptEncryption: false
+    # iCloud key-value store: reading position, ribbons, covers, settings and bookshops sync.
+    # ci/app.env ICLOUD="true" turns the capability on for the bundle ID.
+    entitlements:
+      path: Bunko/Bunko.entitlements
+      properties:
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gios.bunko
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+  BunkoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BunkoTests
+    dependencies:
+      - target: Bunko
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.gios.bunko.tests
+schemes:
+  Bunko:
+    build:
+      targets:
+        Bunko: all
+        BunkoTests: [test]
+    test:
+      targets:
+        - BunkoTests

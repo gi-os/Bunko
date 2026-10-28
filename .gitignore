@@ -1,0 +1,18 @@
+*.xcodeproj/
+build/
+DerivedData/
+.DS_Store
+*.ipa
+*.dSYM.zip
+vendor/
+.bundle/
+fastlane/report.xml
+fastlane/README.md
+fastlane/test_output/
+# written by xcodegen from project.yml
+Bunko/Info.plist
+Bunko/Bunko.entitlements
+# the shared kit (gi-os/.github), fetched by CI and by .claude/hooks/session-start.sh
+.gios/
+.claude/skills/gios-*/
+.claude/settings.local.json
