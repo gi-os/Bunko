@@ -60,7 +60,7 @@ final class Library {
             let id = Book.stableID(title: title, author: epub.author)
             book = Book(id: id, title: title, author: epub.author, fileName: "\(id).epub", format: .epub,
                         language: epub.language, rightToLeft: rightToLeft ?? (epub.rightToLeft || japanese),
-                        addedAt: .now, shopID: shopID)
+                        addedAt: .now, shopID: shopID, series: epub.series, seriesIndex: epub.seriesIndex)
             cover = epub.coverImageData()
         } else if let text = PlainText.decode(data) {
             let japanese = Script.looksJapanese(text)

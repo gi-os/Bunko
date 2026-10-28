@@ -115,11 +115,11 @@ struct CoverStyle: Codable, Equatable {
 
     var baseHex: String { tint ?? paper.base }
 
-    /// A book nobody has dressed yet: everyday papers picked by the book's ID, so the shelf
-    /// looks varied but each book keeps its paper.
+    /// A book nobody has dressed yet: everyday papers picked by the book (by its series, if it's
+    /// in one, so a set matches), so the shelf looks varied but each book keeps its paper.
     static func automatic(for book: Book, shopStamp: String? = nil) -> CoverStyle {
         let everyday: [Paper] = [.kraft, .washi, .linen, .newsprint]
-        let pick = book.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % everyday.count
+        let pick = book.designKey.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % everyday.count
         return CoverStyle(paper: everyday[pick], stamp: shopStamp)
     }
 
