@@ -48,9 +48,12 @@ enum LineSetter {
 
             var (line, gaps) = makeLine(text, string, from: position, to: lineEnd, hyphen: hyphenated)
             var width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-            // Justify unless each space would have to stretch past about half an em.
-            if !closesParagraph, style.alignment == .justified, gaps > 0, width < available,
-               available - width <= font.pointSize * 0.5 * CGFloat(gaps),
+            // Justify unless each space would have to stretch past about half an em. A line without
+            // spaces (Japanese set in rows) is spread between its characters when it's within an
+            // em of full.
+            let slack = available - width
+            if !closesParagraph, style.alignment == .justified, slack > 0,
+               gaps > 0 ? slack <= font.pointSize * 0.5 * CGFloat(gaps) : slack <= font.pointSize,
                let justified = CTLineCreateJustifiedLine(line, 1, Double(available)) {
                 line = justified
                 width = available

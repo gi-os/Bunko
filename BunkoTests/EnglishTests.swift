@@ -33,6 +33,15 @@ struct LineSetterTests {
         #expect(lines.last!.width < 220)
     }
 
+    @Test func japaneseInRowsStillJustifies() {
+        let content = BookContent(chapters: [.init(title: "", paragraphs: [String(repeating: "吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。", count: 4)])])
+        let text = Typesetter.typeset(content, settings: ReaderSettings(), typeface: .mincho, vertical: false, language: "ja").text
+        let setter = CTFramesetterCreateWithAttributedString(text)
+        let lines = LineSetter.lay(text, typesetter: CTFramesetterGetTypesetter(setter), from: 0, size: CGSize(width: 250, height: 5000)).lines
+        #expect(lines.count > 3)
+        #expect(lines.dropLast().allSatisfy { abs($0.origin.x + $0.width - 250) < 0.5 })
+    }
+
     @Test func horizontalPagesCoverTheBook() {
         let content = BookContent(chapters: [.init(title: "I", paragraphs: Array(repeating: "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do.", count: 60))])
         let book = Typesetter.typeset(content, settings: ReaderSettings(), typeface: .serif, vertical: false, language: "en")
