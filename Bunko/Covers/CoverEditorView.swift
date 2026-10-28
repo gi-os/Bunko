@@ -1,15 +1,18 @@
 import SwiftUI
 
-/// Dress a book: pick a paper, ink a stamp, add a title slip, or slide the paper off.
+/// Dress a book: pick a paper, ink a stamp, add a title slip, choose its obi, or slide the paper off.
 struct CoverEditorView: View {
     let book: Book
     @Environment(SyncStore.self) private var sync
     @Environment(Library.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State private var style: CoverStyle
+    /// Opens at the foot, on the obi (the last section): for the screenshots.
+    var opensAtObi = false
 
-    init(book: Book, style: CoverStyle) {
+    init(book: Book, style: CoverStyle, opensAtObi: Bool = false) {
         self.book = book
+        self.opensAtObi = opensAtObi
         _style = State(initialValue: style)
     }
 
@@ -55,9 +58,11 @@ struct CoverEditorView: View {
                             }
                         }
                     }
+                    obis
                 }
                 .padding(20)
             }
+            .defaultScrollAnchor(opensAtObi ? .bottom : nil)
             .navigationTitle("Cover")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -70,6 +75,39 @@ struct CoverEditorView: View {
                 }
             }
         }
+    }
+
+    /// Every kind of obi on this book, wearing what it would say now (or a sample).
+    private var obis: some View {
+        let japanese = book.rightToLeft || book.language.hasPrefix("ja")
+        let obi = Obi.closed(sync.progress(for: book), japanese: japanese) ?? .sample(japanese: japanese)
+        let kinds: [ObiStyle?] = [nil] + ObiStyle.allCases.map(Optional.some)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Obi").font(.headline)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 14) {
+                ForEach(kinds, id: \.self) { kind in
+                    Button { style.obi = kind } label: {
+                        VStack(spacing: 6) {
+                            CoverView(style: dressed(kind), book: book, original: library.originalCover(for: book), obi: obi)
+                                .aspectRatio(105.0 / 148.0, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 2))
+                                .overlay(RoundedRectangle(cornerRadius: 3)
+                                    .stroke(kind == style.obi ? Color.accentColor : .clear, lineWidth: 2.5)
+                                    .padding(-3))
+                            Text(kind?.label ?? "Auto · \(ObiStyle.automatic(for: book.id).label)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func dressed(_ kind: ObiStyle?) -> CoverStyle {
+        var dressed = style
+        dressed.obi = kind
+        return dressed
     }
 
     private var papers: some View {
