@@ -71,21 +71,29 @@ struct CoverStyle: Codable, Equatable {
         var label: String { rawValue.capitalized }
     }
 
-    /// The seal's columns, right to left: one per word when the words are short (BASIL BOOKS ·
-    /// LES), else the letters split evenly into up to three columns of up to six.
-    static func sealColumns(_ stamp: String) -> [String] {
+    /// How the seal sets its stamp: Japanese in columns read right to left, one per word when
+    /// the words are short (文庫堂 本店), else split evenly into up to three columns of six;
+    /// anything else in rows, one per word (BASIL / BOOKS / LES), at most three.
+    static func sealLines(_ stamp: String) -> (lines: [String], vertical: Bool) {
         let words = stamp.uppercased()
             .replacingOccurrences(of: "·", with: " ")
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
-        guard !words.isEmpty else { return [] }
-        if words.count <= 3, words.allSatisfy({ $0.count <= 6 }) { return words }
-        let letters = Array(words.joined().prefix(18))
-        let columns = (letters.count + 5) / 6
-        let perColumn = (letters.count + columns - 1) / columns
-        return stride(from: 0, to: letters.count, by: perColumn).map {
-            String(letters[$0..<min($0 + perColumn, letters.count)])
+        let vertical = stamp.unicodeScalars.contains {
+            (0x3040...0x30FF).contains($0.value) || (0x3400...0x9FFF).contains($0.value) || (0xF900...0xFAFF).contains($0.value)
         }
+        guard words.count > 3 || (vertical && words.contains { $0.count > 6 }) else { return (words, vertical) }
+        if vertical {
+            let letters = Array(words.joined().prefix(18))
+            let count = (letters.count + 5) / 6
+            let perColumn = (letters.count + count - 1) / count
+            let columns = stride(from: 0, to: letters.count, by: perColumn).map {
+                String(letters[$0..<min($0 + perColumn, letters.count)])
+            }
+            return (columns, true)
+        }
+        let perRow = (words.count + 2) / 3
+        return (stride(from: 0, to: words.count, by: perRow).map { words[$0..<min($0 + perRow, words.count)].joined(separator: " ") }, false)
     }
 
     var paper = Paper.kraft

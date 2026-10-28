@@ -154,7 +154,7 @@ struct ShelfView: View {
     /// Screenshots show the printed papers and the seal: the Japanese sample in waves with a
     /// bookshop's 朱印, the others in hemp leaf.
     private func dressForScreenshots() {
-        for book in library.books where sync.storedCover(for: book) == nil {
+        for book in library.books {
             var style = CoverStyle(paper: book.rightToLeft ? .seigaiha : .asanoha, stamp: book.rightToLeft ? "文庫堂" : nil)
             if book.rightToLeft { style.stampShape = .seal }
             sync.setCover(style, for: book)

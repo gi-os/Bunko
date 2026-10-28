@@ -3,18 +3,22 @@ import Testing
 @testable import Bunko
 
 struct CoverTests {
-    @Test func sealSetsShortWordsInTheirOwnColumns() {
-        #expect(CoverStyle.sealColumns("Bunko") == ["BUNKO"])
-        #expect(CoverStyle.sealColumns("BASIL BOOKS · LES") == ["BASIL", "BOOKS", "LES"])
-        #expect(CoverStyle.sealColumns("紀伊國屋書店") == ["紀伊國屋書店"])
-        #expect(CoverStyle.sealColumns("  ").isEmpty)
+    @Test func sealSetsJapaneseInColumnsAndLatinInRows() {
+        #expect(CoverStyle.sealLines("文庫堂").lines == ["文庫堂"])
+        #expect(CoverStyle.sealLines("文庫堂").vertical)
+        #expect(CoverStyle.sealLines("文庫堂 本店").lines == ["文庫堂", "本店"])
+        #expect(CoverStyle.sealLines("Bunko").lines == ["BUNKO"])
+        #expect(!CoverStyle.sealLines("Bunko").vertical)
+        #expect(CoverStyle.sealLines("BASIL BOOKS · LES").lines == ["BASIL", "BOOKS", "LES"])
+        #expect(CoverStyle.sealLines("  ").lines.isEmpty)
     }
 
     @Test func sealSplitsLongNamesEvenly() {
-        #expect(CoverStyle.sealColumns("Kinokuniya") == ["KINOK", "UNIYA"])
-        #expect(CoverStyle.sealColumns("Kinokuniya Shinjuku") == ["KINOKU", "NIYASH", "INJUKU"])
+        #expect(CoverStyle.sealLines("紀伊國屋書店新宿本店").lines == ["紀伊國屋書", "店新宿本店"])
         // Never more than three columns of six.
-        #expect(CoverStyle.sealColumns(String(repeating: "A", count: 30)).map(\.count) == [6, 6, 6])
+        #expect(CoverStyle.sealLines(String(repeating: "本", count: 30)).lines.map(\.count) == [6, 6, 6])
+        // Latin keeps whole words, at most three rows.
+        #expect(CoverStyle.sealLines("The Last Bookshop on Main Street").lines == ["THE LAST", "BOOKSHOP ON", "MAIN STREET"])
     }
 
     @Test func dogEarWaitsUntilABookIsWellRead() {

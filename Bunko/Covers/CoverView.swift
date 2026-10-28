@@ -140,7 +140,7 @@ struct PaperCover: View {
                 ctx.fill(Path(ellipseIn: fan), with: .color(base))
                 var rings = Path()
                 for k in 0..<4 { rings.addEllipse(in: fan.insetBy(dx: r * CGFloat(k) * 0.24, dy: r * CGFloat(k) * 0.24)) }
-                ctx.stroke(rings, with: .color(ink.opacity(0.3)), lineWidth: max(0.5, r * 0.06))
+                ctx.stroke(rings, with: .color(ink.opacity(0.26)), lineWidth: max(0.5, r * 0.055))
                 x += r * 2
             }
             y += r / 2
@@ -244,40 +244,60 @@ struct PaperCover: View {
     }
 
     /// A vermilion seal (朱印) in place of the stamp: a solid block with the letters cut out of it,
-    /// in columns read right to left, pressed a little crooked, the ink thin towards one corner.
+    /// Japanese in columns read right to left, anything else in rows, pressed a little crooked,
+    /// the ink thin towards one corner and round the edges.
     private func drawSeal(_ ctx: inout GraphicsContext, size: CGSize, unit: CGFloat) {
-        let columns = CoverStyle.sealColumns(style.stamp)
-        guard !columns.isEmpty else { return }
-        let rows = CGFloat(columns.map(\.count).max() ?? 1)
-        let pad: CGFloat = 0.3
-        let cell = min(size.width * 0.3 / (CGFloat(columns.count) + pad * 2), size.height * 0.26 / (rows + pad * 2))
-        let box = CGRect(x: 0, y: 0, width: cell * (CGFloat(columns.count) + pad * 2), height: cell * (rows + pad * 2))
+        let (lines, vertical) = CoverStyle.sealLines(style.stamp)
+        guard !lines.isEmpty else { return }
+        // Laid out on a 100pt grid, then scaled to fit near the foot.
+        let em: CGFloat = 100
+        let font = Typesetter.swiftUIFont(.mincho, size: em * 0.84, bold: true)
+        let pad = em * 0.3
+        let rows = lines.map { ctx.resolve(Text($0).font(font).tracking(em * 0.04)) }
+        let content = vertical
+            ? CGSize(width: em * CGFloat(lines.count), height: em * CGFloat(lines.map(\.count).max() ?? 1))
+            : CGSize(width: rows.map { $0.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: em)).width }.max() ?? em,
+                     height: em * 0.92 * CGFloat(lines.count))
+        let box = CGRect(x: 0, y: 0, width: content.width + pad * 2, height: content.height + pad * 2)
         var seal = ctx
         seal.translateBy(x: book.rightToLeft ? size.width * 0.36 : size.width * 0.68, y: size.height * 0.8)
         seal.rotate(by: .degrees(-4))
+        seal.scaleBy(x: min(size.width * 0.3 / box.width, size.height * 0.2 / box.height),
+                     y: min(size.width * 0.3 / box.width, size.height * 0.2 / box.height))
         seal.translateBy(x: -box.midX, y: -box.midY)
         seal.opacity = 0.9
         var rng = SeededRandom(string: book.id + style.stamp + "seal")
         seal.drawLayer { layer in
-            layer.fill(Path(roundedRect: box, cornerRadius: cell * 0.1), with: .color(Color(hex: "C23A22")))
+            layer.fill(Path(roundedRect: box, cornerRadius: em * 0.1), with: .color(Color(hex: "C23A22")))
             layer.blendMode = .destinationOut
-            for (c, column) in columns.enumerated() {
-                let x = box.maxX - cell * (pad + CGFloat(c) + 0.5)
-                let top = box.minY + cell * (pad + (rows - CGFloat(column.count)) / 2)
-                for (r, letter) in column.enumerated() {
-                    var text = layer.resolve(Text(String(letter)).font(Typesetter.swiftUIFont(.mincho, size: cell * 0.84, bold: true)))
+            if vertical {
+                let tallest = CGFloat(lines.map(\.count).max() ?? 1)
+                for (c, column) in lines.enumerated() {
+                    let x = box.maxX - pad - em * (CGFloat(c) + 0.5)
+                    let top = pad + em * (tallest - CGFloat(column.count)) / 2
+                    for (r, letter) in column.enumerated() {
+                        var text = layer.resolve(Text(String(letter)).font(font))
+                        text.shading = .color(.black)
+                        layer.draw(text, at: CGPoint(x: x, y: top + em * (CGFloat(r) + 0.5)))
+                    }
+                }
+            } else {
+                for (i, row) in rows.enumerated() {
+                    var text = row
                     text.shading = .color(.black)
-                    layer.draw(text, at: CGPoint(x: x, y: top + cell * (CGFloat(r) + 0.5)))
+                    layer.draw(text, at: CGPoint(x: box.midX, y: pad + em * 0.92 * (CGFloat(i) + 0.5)))
                 }
             }
-            // Where the ink was thin the paper shows through, more so away from the top left.
-            for _ in 0..<Int(box.width * box.height / (cell * cell) * 16) {
+            // Where the ink was thin the paper shows through as a fine grain, more so away from
+            // the top left and along the edges.
+            for _ in 0..<Int(box.width * box.height / (em * em) * 260) {
                 let p = CGPoint(x: .random(in: box.minX...box.maxX, using: &rng), y: .random(in: box.minY...box.maxY, using: &rng))
-                let thin = 0.2 + 0.4 * (p.x / box.width + p.y / box.height)
+                let edge = min(p.x - box.minX, box.maxX - p.x, p.y - box.minY, box.maxY - p.y) / em
+                let thin = 0.1 + 0.25 * (p.x / box.width + p.y / box.height) + (edge < 0.08 ? 0.5 : 0)
                 guard CGFloat.random(in: 0...1, using: &rng) < thin else { continue }
-                let r = cell * .random(in: 0.015...0.06, using: &rng)
+                let r = em * .random(in: 0.006...0.022, using: &rng)
                 layer.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
-                           with: .color(.black.opacity(.random(in: 0.3...0.9, using: &rng))))
+                           with: .color(.black.opacity(.random(in: 0.25...0.8, using: &rng))))
             }
         }
     }
