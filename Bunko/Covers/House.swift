@@ -173,23 +173,7 @@ struct HouseCover: View {
         case .chidori:
             VStack(spacing: 0) {
                 ZStack {
-                    Canvas { ctx, size in
-                        // 矢絣: columns of arrow feathers, each column half a feather down from the last.
-                        let c = w * 0.14, r = c * 1.1
-                        var feathers = Path()
-                        for i in 0...Int(size.width / c) + 1 {
-                            let x = CGFloat(i) * c
-                            var y = (i.isMultiple(of: 2) ? 0 : -r / 2) - r
-                            while y < size.height + r {
-                                feathers.addLines([CGPoint(x: x, y: y), CGPoint(x: x + c / 2, y: y + r * 0.42),
-                                                   CGPoint(x: x + c, y: y), CGPoint(x: x + c, y: y + r * 0.5),
-                                                   CGPoint(x: x + c / 2, y: y + r * 0.92), CGPoint(x: x, y: y + r * 0.5)])
-                                feathers.closeSubpath()
-                                y += r
-                            }
-                        }
-                        ctx.fill(feathers, with: .color(colour))
-                    }
+                    ArrowFeathers(column: w * 0.14).fill(colour)
                     .background(cream)
                     title(ink, width: w * 0.62, height: h * 0.38, size: w * 0.1)
                         .padding(w * 0.05)
@@ -312,5 +296,28 @@ struct HouseCover: View {
         .frame(width: w * 0.14)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(colour)
+    }
+}
+
+/// 矢絣: columns of arrow feathers, each column half a feather down from the last. `column` is
+/// a column's width; a feather is a little taller than that.
+struct ArrowFeathers: Shape {
+    var column: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let c = max(column, 2), r = c * 1.1
+        var feathers = Path()
+        for i in 0...Int(rect.width / c) + 1 {
+            let x = rect.minX + CGFloat(i) * c
+            var y = rect.minY + (i.isMultiple(of: 2) ? 0 : -r / 2) - r
+            while y < rect.maxY + r {
+                feathers.addLines([CGPoint(x: x, y: y), CGPoint(x: x + c / 2, y: y + r * 0.42),
+                                   CGPoint(x: x + c, y: y), CGPoint(x: x + c, y: y + r * 0.5),
+                                   CGPoint(x: x + c / 2, y: y + r * 0.92), CGPoint(x: x, y: y + r * 0.5)])
+                feathers.closeSubpath()
+                y += r
+            }
+        }
+        return feathers
     }
 }
