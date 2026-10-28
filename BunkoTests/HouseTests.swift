@@ -59,4 +59,24 @@ struct HouseTests {
         #expect(try JSONDecoder().decode(CoverStyle.self, from: Data(#"{"paper":"kraft"}"#.utf8)).house == nil)
         #expect(try JSONDecoder().decode(CoverStyle.self, from: Data(#"{"paper":"kraft","house":"marbled"}"#.utf8)).house == nil)
     }
+
+    @Test func englishEditionsNameThemselvesInEnglish() {
+        let houses = House.Imprint.allCases
+        #expect(Set(houses.map(\.englishName)).count == 15)
+        // Each English mark is its own, so the ring tells the houses apart on a spine.
+        #expect(Set(houses.map(\.englishColophon)).count == 15)
+        #expect(House.Imprint.namari.colophon(english: true) == "&")
+        #expect(House.Imprint.shirasagi.name(english: true) == "Egret Books")
+        #expect(House.Imprint.shirasagi.name(english: false) == "白鷺文庫")
+    }
+
+    @Test func aBookPrintsInItsOwnLanguage() {
+        #expect(book("こころ", by: "夏目漱石", rtl: true).printsJapanese)
+        #expect(!book("Alice", by: "Lewis Carroll").printsJapanese)
+        let arabic = Book(id: "a", title: "ألف ليلة وليلة", author: "", fileName: "", format: .txt, language: "ar", rightToLeft: true, addedAt: .now)
+        #expect(!arabic.printsJapanese)
+        #expect(!arabic.setVertically)
+        let untagged = Book(id: "u", title: "吾輩は猫である", author: "", fileName: "", format: .txt, language: "", rightToLeft: true, addedAt: .now)
+        #expect(untagged.printsJapanese)
+    }
 }

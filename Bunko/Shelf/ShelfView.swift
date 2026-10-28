@@ -87,7 +87,8 @@ struct ShelfView: View {
             }
             .sheet(item: $dressing) { book in
                 CoverEditorView(book: book, style: sync.cover(for: book),
-                                opensAt: UserDefaults.standard.string(forKey: "gios-screen").flatMap(CoverEditorView.Section.init(rawValue:)))
+                                opensAt: UserDefaults.standard.string(forKey: "gios-screen")
+                                    .flatMap { CoverEditorView.Section(rawValue: $0.replacingOccurrences(of: "-en", with: "")) })
             }
             .sheet(item: $editingInfo) { book in BookInfoView(book: book) }
             .sheet(isPresented: $showsSettings) { SettingsView() }
@@ -168,6 +169,7 @@ struct ShelfView: View {
         case "closed-en": if let english { open(english, closed: true) }
         case "cover": dressing = japanese
         case "obi", "houses": dressing = japanese
+        case "obi-en", "houses-en": dressing = english
         case "info": editingInfo = japanese
         case "navigator":
             if let japanese {
@@ -233,7 +235,7 @@ struct ShelfBook: View {
         VStack(spacing: 8) {
             // Finished books wear their obi on the shelf.
             CoverView(style: cover, book: book, original: original, wear: progress?.wear ?? 0,
-                      obi: Obi.finished(progress, japanese: book.rightToLeft || book.language.hasPrefix("ja")))
+                      obi: Obi.finished(progress, japanese: book.printsJapanese))
                 .aspectRatio(105.0 / 148.0, contentMode: .fit)
                 .clipShape(UnevenRoundedRectangle(cornerRadii: .init(
                     topLeading: book.rightToLeft ? 3 : 1, bottomLeading: book.rightToLeft ? 3 : 1,

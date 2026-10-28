@@ -198,6 +198,15 @@ extension Book {
     }
 
     var rowsRightToLeft: Bool { Self.writtenRightToLeft(language) }
+
+    /// Whether its cover and obi are printed in Japanese; every other book's are printed in
+    /// English, in the same bunko design language.
+    var printsJapanese: Bool {
+        Self.languageCode(language) == "ja" || (language.isEmpty && Script.looksJapanese(title))
+    }
+
+    /// Set in columns: a Japanese book bound on the right.
+    var setVertically: Bool { rightToLeft && !rowsRightToLeft && printsJapanese }
 }
 
 enum Script {

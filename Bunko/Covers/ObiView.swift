@@ -159,10 +159,10 @@ struct ObiView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: outer)
             }
         case .fair:
-            // The 応募券 to cut out, at the outer foot.
+            // The 応募券 (an English fair's token) to cut out, at the outer foot.
             VStack(spacing: o * 0.008) {
-                Text("応募券").font(.system(size: o * 0.07, weight: .bold))
-                Text("\(season.label(japanese: true))").font(.system(size: o * 0.045, weight: .medium)).opacity(0.8)
+                Text(japanese ? "応募券" : "TOKEN").font(.system(size: o * 0.07, weight: .bold)).tracking(japanese ? 0 : o * 0.006)
+                Text(season.label(japanese: japanese)).font(.system(size: o * 0.045, weight: .medium)).opacity(0.8)
             }
             .lineLimit(1)
             .minimumScaleFactor(0.5)

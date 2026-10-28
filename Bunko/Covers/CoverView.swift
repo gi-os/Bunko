@@ -18,7 +18,7 @@ struct CoverView: View {
                 if let obi {
                     let kind = style.obi ?? .automatic(for: book.designKey)
                     GeometryReader { geo in
-                        ObiView(obi: obi, japanese: book.rightToLeft || book.language.hasPrefix("ja"),
+                        ObiView(obi: obi, japanese: book.printsJapanese,
                                 spineOnRight: book.rightToLeft, style: kind, title: book.title)
                             .printed(strength: large ? 1 : 0.75)
                             .frame(height: geo.size.height * kind.height(large: large))
@@ -181,7 +181,7 @@ struct PaperCover: View {
     /// horizontal one wraps, then shrinks.
     private func drawLabel(_ ctx: inout GraphicsContext, size: CGSize, unit: CGFloat) {
         let fontSize = max(9, size.width * 0.075)
-        let vertical = book.rightToLeft
+        let vertical = book.setVertically
         let inkColor = Color(hex: "2A241E")
         // A volume number is printed on the slip when the title doesn't already carry it.
         let number = book.series != nil ? book.volume?.index : nil

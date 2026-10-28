@@ -22,7 +22,7 @@ enum WidgetSnapshot {
 
     static func cover(for book: Book, library: Library, sync: SyncStore) -> UIImage? {
         let progress = sync.progress(for: book)
-        let japanese = book.rightToLeft || book.language.hasPrefix("ja")
+        let japanese = book.printsJapanese
         let renderer = ImageRenderer(content:
             CoverView(style: sync.cover(for: book), book: book, original: library.originalCover(for: book),
                       wear: progress?.wear ?? 0, obi: Obi.finished(progress, japanese: japanese))

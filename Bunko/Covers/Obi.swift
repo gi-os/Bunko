@@ -92,7 +92,7 @@ struct Obi: Equatable {
             return ObiCopy(headline: japanese ? "累計\(pages)ページ突破!" : "\(pages) pages and counting!",
                            detail: japanese ? "\(headline)・\(detail)" : "\(headline) · \(detail)", badge: percent)
         case .award:
-            if finished { return ObiCopy(headline: japanese ? "祝・読了" : "Finished", detail: detail, badge: japanese ? "読了" : "Read") }
+            if finished { return ObiCopy(headline: japanese ? "祝・読了" : "Read cover to cover", detail: detail, badge: japanese ? "読了" : "Read") }
             return ObiCopy(headline: headline, detail: detail, badge: percent)
         case .quote:
             // An endorsement, from you: what happened, in your words.
@@ -184,10 +184,10 @@ enum Season: CaseIterable {
 
     func label(japanese: Bool) -> String {
         switch self {
-        case .spring: japanese ? "春の一冊" : "Spring reading"
-        case .summer: japanese ? "夏の一冊" : "Summer reading"
-        case .autumn: japanese ? "読書の秋" : "Autumn reading"
-        case .winter: japanese ? "冬の一冊" : "Winter reading"
+        case .spring: japanese ? "春の一冊" : "Spring Reads"
+        case .summer: japanese ? "夏の一冊" : "Summer Reads"
+        case .autumn: japanese ? "読書の秋" : "Autumn Reads"
+        case .winter: japanese ? "冬の一冊" : "Winter Reads"
         }
     }
 }

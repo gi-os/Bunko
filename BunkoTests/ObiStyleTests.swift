@@ -44,7 +44,8 @@ struct ObiStyleTests {
         #expect(done.copy(.award, japanese: true, season: .autumn).headline == "祝・読了")
         #expect(reading.copy(.award, japanese: true, season: .autumn).badge == "42%")
         #expect(reading.copy(.fair, japanese: true, season: .autumn).label == "読書の秋")
-        #expect(reading.copy(.fair, japanese: false, season: .summer).label == "Summer reading")
+        #expect(reading.copy(.fair, japanese: false, season: .summer).label == "Summer Reads")
+        #expect(done.copy(.award, japanese: false, season: .autumn).headline == "Read cover to cover")
         #expect(reading.copy(.classic, japanese: true, season: .autumn) == ObiCopy(headline: "今日 34ページ", detail: "全体の42%"))
     }
 

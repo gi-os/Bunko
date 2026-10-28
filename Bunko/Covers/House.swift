@@ -60,6 +60,38 @@ struct House: Equatable {
             }
         }
 
+        /// The house as an English edition names itself.
+        var englishName: String {
+            switch self {
+            case .shirasagi: "Egret Books"
+            case .tsukikage: "Moonshadow Library"
+            case .seirin: "Bluegrove Press"
+            case .chidori: "Plover Paperbacks"
+            case .todai: "Lighthouse Books"
+            case .shimi: "Silverfish Classics"
+            case .watoji: "Threadbound Editions"
+            case .kirara: "Opal Press"
+            case .kinu: "Gold Crow Library"
+            case .shimo: "Frost Editions"
+            case .nichirin: "Helio Books"
+            case .choyo: "Double Ninth Press"
+            case .kodama: "Cedar Books"
+            case .namari: "Ampersand Press"
+            case .aizome: "Indigo Books"
+            }
+        }
+
+        /// The English edition's mark in the ring: one letter (or the ampersand), each its own.
+        var englishColophon: String {
+            switch self {
+            case .namari: "&"
+            default: String(englishName.prefix(1))
+            }
+        }
+
+        func name(english: Bool) -> String { english ? englishName : name }
+        func colophon(english: Bool) -> String { english ? englishColophon : colophon }
+
         /// How it's made, for the cover editor.
         var technique: String {
             switch self {
@@ -184,7 +216,23 @@ struct HouseCover: View {
     var imprint: House.Imprint?
 
     var house: House { .of(book, imprint: imprint) }
-    var vertical: Bool { book.rightToLeft }
+    var vertical: Bool { book.setVertically }
+    /// An English edition: the same house, its name, mark and lettering in English.
+    var english: Bool { !book.printsJapanese }
+    var imprintName: String { house.imprint.name(english: english) }
+    var colophonMark: String { house.imprint.colophon(english: english) }
+
+    /// The imprint's name as its edition sets it: mincho for Japanese, tracked small capitals for English.
+    func imprintLine(size: CGFloat, w: CGFloat) -> Text {
+        english
+            ? Text(imprintName.uppercased()).font(Typesetter.swiftUIFont(.serif, size: size * 0.78, bold: true)).tracking(w * 0.008)
+            : Text(imprintName).font(Typesetter.swiftUIFont(.mincho, size: size, bold: true)).tracking(w * 0.012)
+    }
+
+    /// The mark in the ring: a kanji, or for English a capital in Literata.
+    func colophonText(size: CGFloat) -> Text {
+        Text(colophonMark).font(Typesetter.swiftUIFont(english ? .serif : .mincho, size: english ? size * 1.05 : size, bold: true))
+    }
     var colour: Color { Color(hex: house.colour) }
     var cream: Color { Color(hex: "F5F0E4") }
     var ink: Color { Color(hex: "26221D") }
@@ -200,7 +248,7 @@ struct HouseCover: View {
             .clipped()
         }
         .accessibilityElement()
-        .accessibilityLabel("\(book.title), \(book.author), \(house.imprint.name)")
+        .accessibilityLabel("\(book.title), \(book.author), \(imprintName)")
     }
 
     @ViewBuilder private func face(w: CGFloat, h: CGFloat) -> some View {
@@ -351,11 +399,10 @@ struct HouseCover: View {
     /// The house mark and name.
     func foot(_ color: Color, w: CGFloat) -> some View {
         VStack(spacing: w * 0.015) {
-            Text(house.imprint.colophon)
-                .font(Typesetter.swiftUIFont(.mincho, size: w * 0.05, bold: true))
+            colophonText(size: w * 0.05)
                 .frame(width: w * 0.085, height: w * 0.085)
                 .overlay(Circle().stroke(color, lineWidth: max(0.5, w * 0.005)))
-            Text(house.imprint.name).font(Typesetter.swiftUIFont(.mincho, size: w * 0.042, bold: true)).tracking(w * 0.012)
+            imprintLine(size: w * 0.042, w: w)
         }
         .foregroundStyle(color)
         .lineLimit(1)
@@ -365,9 +412,19 @@ struct HouseCover: View {
 
     /// 青林's stripe down the spine side, its name set vertically in it.
     private func stripe(w: CGFloat) -> some View {
-        VStack(spacing: w * 0.01) {
-            ForEach(Array(house.imprint.name.enumerated()), id: \.offset) { _, ch in
-                Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: w * 0.06, bold: true))
+        Group {
+            if english {
+                // An English name runs down the stripe, top to bottom, as on an English spine.
+                imprintLine(size: w * 0.055, w: w)
+                    .fixedSize()
+                    .rotationEffect(.degrees(90))
+                    .frame(width: w * 0.14, height: w * 0.9)
+            } else {
+                VStack(spacing: w * 0.01) {
+                    ForEach(Array(imprintName.enumerated()), id: \.offset) { _, ch in
+                        Text(String(ch)).font(Typesetter.swiftUIFont(.mincho, size: w * 0.06, bold: true))
+                    }
+                }
             }
         }
         .foregroundStyle(cream)
