@@ -160,11 +160,17 @@ struct House: Equatable {
     var colour: String
     /// Which of the house's three layouts this book was printed in.
     var variant = 0
+    /// An English book's own English house, when it drew one (otherwise `imprint`, in English).
+    var edition: EnglishHouse?
     var shelfCode: String
+    /// What an English house prints in place of the shelf code: its catalogue number.
+    var catalogue = ""
     var price: Int
 
     /// The book's house: the one chosen for it, or one picked by its series or itself.
-    static func of(_ book: Book, imprint chosen: Imprint? = nil) -> House {
+    /// The book's house: the one chosen for it (a Japanese house, or for an English book one of
+    /// the English houses), or the one its look picked.
+    static func of(_ book: Book, imprint chosen: Imprint? = nil, edition chosenEdition: EnglishHouse? = nil) -> House {
         let author = book.author.trimmingCharacters(in: .whitespaces)
         // The book's look picks its house, colour and layout (a series shares one); the shelf code
         // numbers the author and, in a series, the volume.
@@ -172,10 +178,14 @@ struct House: Equatable {
         let byBook = hash(book.id)
         let byAuthor = hash(book.volume?.series ?? (author.isEmpty ? book.title : author))
         let number = book.volume?.index.map { Int($0) } ?? byBook % 40 + 1
+        let edition = chosen == nil ? (chosenEdition ?? look.edition) : nil
+        let catalogue = book.volume?.index.map { "No. \(100 + byAuthor % 800)·\(Int($0))" } ?? "No. \(1000 + byBook % 8000)"
         return House(imprint: chosen ?? look.imprint,
                      colour: look.colour,
                      variant: look.variant,
+                     edition: book.printsJapanese ? nil : edition,
                      shelfCode: "\(initial(of: author.isEmpty ? book.title : author)) \(byAuthor % 60 + 1) \(number)",
+                     catalogue: catalogue,
                      price: 400 + hash(book.id + "¥") % 50 * 10)
     }
 
@@ -217,8 +227,10 @@ struct HouseCover: View {
     var large = false
     /// A house chosen in the cover editor; nil picks one.
     var imprint: House.Imprint?
+    /// An English house chosen in the cover editor, by id.
+    var edition: String?
 
-    var house: House { .of(book, imprint: imprint) }
+    var house: House { .of(book, imprint: imprint, edition: edition.flatMap(EnglishHouse.with(id:))) }
     var vertical: Bool { book.setVertically }
     /// An English edition: the same house, its name, mark and lettering in English.
     var english: Bool { !book.printsJapanese }
@@ -241,17 +253,23 @@ struct HouseCover: View {
     var ink: Color { Color(hex: "26221D") }
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            ZStack {
-                face(w: w, h: h)
-                Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile).blendMode(.multiply).opacity(0.5)
+        let house = house
+        if let edition = house.edition {
+            // One of the English houses: printed its own way.
+            EnglishCover(book: book, house: house, edition: edition)
+        } else {
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                ZStack {
+                    face(w: w, h: h)
+                    Image(uiImage: PaperGrain.tile).resizable(resizingMode: .tile).blendMode(.multiply).opacity(0.5)
+                }
+                .frame(width: w, height: h)
+                .clipped()
             }
-            .frame(width: w, height: h)
-            .clipped()
+            .accessibilityElement()
+            .accessibilityLabel("\(book.title), \(book.author), \(imprintName)")
         }
-        .accessibilityElement()
-        .accessibilityLabel("\(book.title), \(book.author), \(imprintName)")
     }
 
     @ViewBuilder private func face(w: CGFloat, h: CGFloat) -> some View {

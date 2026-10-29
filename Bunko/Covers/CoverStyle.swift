@@ -118,6 +118,8 @@ struct CoverStyle: Codable, Equatable {
     var obi: ObiStyle?
     /// The publisher's cover under the paper; nil picks a house by the book (or its series).
     var house: House.Imprint?
+    /// For an English book, one of the English houses chosen instead (`EnglishHouse.id`).
+    var edition: String?
 
     init(paper: Paper = .kraft, stamp: String? = nil) {
         self.paper = paper
@@ -146,5 +148,6 @@ struct CoverStyle: Codable, Equatable {
         wrapped = (try? c.decodeIfPresent(Bool.self, forKey: .wrapped)) ?? true
         obi = try? c.decodeIfPresent(ObiStyle.self, forKey: .obi)
         house = try? c.decodeIfPresent(House.Imprint.self, forKey: .house)
+        edition = (try? c.decodeIfPresent(String.self, forKey: .edition)).flatMap { $0 }.flatMap { EnglishHouse.with(id: $0)?.id }
     }
 }

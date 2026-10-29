@@ -105,28 +105,51 @@ struct CoverEditorView: View {
         return library.books.filter { $0.designKey == book.designKey }
     }
 
-    /// The fifteen publisher covers this book could have under its paper, and the automatic one.
+    /// A publisher's cover to choose: picked for the book, one of the fifteen houses, or (for an
+    /// English book) one of the forty-five English houses.
+    private enum HouseChoice: Hashable {
+        case auto
+        case house(House.Imprint)
+        case edition(String)
+    }
+
+    private var chosenHouse: HouseChoice {
+        if let id = style.edition { return .edition(id) }
+        return style.house.map(HouseChoice.house) ?? .auto
+    }
+
+    /// The publisher covers this book could have under its paper: the fifteen houses (in English
+    /// for an English book) and, for an English book, the forty-five English houses.
     private var houses: some View {
-        let kinds: [House.Imprint?] = [nil] + House.Imprint.allCases.map(Optional.some)
+        let english = !book.printsJapanese
+        // An English book's own houses first, then the fifteen in their English editions.
+        let choices: [HouseChoice] = [.auto] + (english ? EnglishHouse.all.map { .edition($0.id) } : [])
+            + House.Imprint.allCases.map(HouseChoice.house)
+        let auto = House.of(book)
         return VStack(alignment: .leading, spacing: 12) {
             Text("Publisher cover").font(.headline)
-            Text("The book's own cover, under the paper.").font(.caption).foregroundStyle(.secondary)
+            Text(english ? "The book's own cover, under the paper: sixty houses, forty-five of them English."
+                         : "The book's own cover, under the paper.")
+                .font(.caption).foregroundStyle(.secondary)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 14) {
-                ForEach(kinds, id: \.self) { kind in
+                ForEach(choices, id: \.self) { choice in
                     Button {
-                        style.house = kind
+                        switch choice {
+                        case .auto: style.house = nil; style.edition = nil
+                        case .house(let imprint): style.house = imprint; style.edition = nil
+                        case .edition(let id): style.house = nil; style.edition = id
+                        }
                         style.wrapped = false
                     } label: {
                         VStack(spacing: 3) {
-                            HouseCover(book: book, imprint: kind).printed(strength: 0.75)
+                            houseThumbnail(choice)
                                 .aspectRatio(105.0 / 148.0, contentMode: .fit)
                                 .clipShape(RoundedRectangle(cornerRadius: 2))
                                 .overlay(RoundedRectangle(cornerRadius: 3)
-                                    .stroke(kind == style.house && !style.wrapped ? Color.accentColor : .clear, lineWidth: 2.5)
+                                    .stroke(choice == chosenHouse && !style.wrapped ? Color.accentColor : .clear, lineWidth: 2.5)
                                     .padding(-3))
-                            Text(kind?.name(english: !book.printsJapanese) ?? "Auto · \(House.of(book).imprint.name(english: !book.printsJapanese))")
-                                .font(.caption2)
-                            Text(kind?.technique ?? "Picked for the book").font(.caption2).foregroundStyle(.secondary)
+                            Text(houseName(choice, auto: auto, english: english)).font(.caption2)
+                            Text(houseSummary(choice)).font(.caption2).foregroundStyle(.secondary)
                         }
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -134,6 +157,30 @@ struct CoverEditorView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func houseThumbnail(_ choice: HouseChoice) -> some View {
+        switch choice {
+        case .auto: HouseCover(book: book).printed(strength: 0.75)
+        case .house(let imprint): HouseCover(book: book, imprint: imprint).printed(strength: 0.75)
+        case .edition(let id): HouseCover(book: book, edition: id).printed(strength: 0.75)
+        }
+    }
+
+    private func houseName(_ choice: HouseChoice, auto: House, english: Bool) -> String {
+        switch choice {
+        case .auto: "Auto · " + (auto.edition?.name ?? auto.imprint.name(english: english))
+        case .house(let imprint): imprint.name(english: english)
+        case .edition(let id): EnglishHouse.with(id: id)?.name ?? id
+        }
+    }
+
+    private func houseSummary(_ choice: HouseChoice) -> String {
+        switch choice {
+        case .auto: "Picked for the book"
+        case .house(let imprint): imprint.technique
+        case .edition(let id): EnglishHouse.with(id: id)?.summary ?? ""
         }
     }
 

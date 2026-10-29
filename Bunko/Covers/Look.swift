@@ -43,6 +43,9 @@ struct Look: Equatable {
     /// Which batch of paper: a shade lighter (-1), as made (0), a shade darker (1).
     var shade: Int
     var imprint: House.Imprint
+    /// An English book's English house, when it drew one of the forty-five rather than one of the
+    /// fifteen Japanese houses in its English edition.
+    var edition: EnglishHouse?
     var colour: String
     /// Which of its house's three layouts.
     var variant: Int
@@ -58,17 +61,27 @@ struct Look: Equatable {
         var rng = SeededRandom(string: book.designKey + "look")
         func pick<T>(_ options: [T]) -> T { options[Int.random(in: 0..<options.count, using: &rng)] }
         let shops = book.printsJapanese ? japaneseShops : englishShops
-        return Look(shop: Int.random(in: 0..<shops.count, using: &rng),
-                    paper: pick(papers),
-                    shade: Int.random(in: -1...1, using: &rng),
-                    imprint: pick(House.Imprint.allCases),
-                    colour: pick(colours),
-                    variant: Int.random(in: 0...2, using: &rng),
-                    stampTurn: .random(in: -14...5, using: &rng),
-                    stampShift: CGSize(width: .random(in: -0.05...0.05, using: &rng), height: .random(in: -0.04...0.03, using: &rng)),
-                    slipShift: CGSize(width: .random(in: -0.02...0.02, using: &rng), height: .random(in: -0.015...0.02, using: &rng)),
-                    phase: .random(in: 0..<1, using: &rng))
+        var look = Look(shop: Int.random(in: 0..<shops.count, using: &rng),
+                        paper: pick(papers),
+                        shade: Int.random(in: -1...1, using: &rng),
+                        imprint: pick(House.Imprint.allCases),
+                        edition: nil,
+                        colour: pick(colours),
+                        variant: Int.random(in: 0...2, using: &rng),
+                        stampTurn: .random(in: -14...5, using: &rng),
+                        stampShift: CGSize(width: .random(in: -0.05...0.05, using: &rng), height: .random(in: -0.04...0.03, using: &rng)),
+                        slipShift: CGSize(width: .random(in: -0.02...0.02, using: &rng), height: .random(in: -0.015...0.02, using: &rng)),
+                        phase: .random(in: 0..<1, using: &rng))
+        // An English book draws from sixty houses: the fifteen above in English, and forty-five of its own.
+        if !book.printsJapanese {
+            let draw = Int.random(in: 0..<(House.Imprint.allCases.count + EnglishHouse.all.count), using: &rng)
+            if draw >= House.Imprint.allCases.count { look.edition = EnglishHouse.all[draw - House.Imprint.allCases.count] }
+        }
+        return look
     }
+
+    /// The house, whichever kind: an English house's id, or the Japanese house's name.
+    var houseKey: String { edition.map { "en:" + $0.id } ?? imprint.rawValue }
 
     func shop(japanese: Bool) -> Shop {
         let shops = japanese ? Self.japaneseShops : Self.englishShops
@@ -78,9 +91,9 @@ struct Look: Equatable {
     /// What two paper covers must not share: the same shop's stamp on the same paper in the same shade.
     var paperSignature: String { "\(shop)|\(paper.rawValue)|\(shade)" }
     /// What two publisher's covers must not share: house, colour and layout.
-    var houseSignature: String { "\(imprint.rawValue)|\(colour)|\(variant)" }
+    var houseSignature: String { "\(houseKey)|\(colour)|\(variant)" }
     /// A house's layout, whatever its colour: kept apart while there are layouts left.
-    var layoutSignature: String { "\(imprint.rawValue)|\(variant)" }
+    var layoutSignature: String { "\(houseKey)|\(variant)" }
     /// A shop's paper, whatever its shade: kept apart while there are papers left.
     var shopPaperSignature: String { "\(shop)|\(paper.rawValue)" }
 
@@ -91,7 +104,8 @@ struct Look: Equatable {
     /// they already have, so nothing changes under you.
     static func assign(_ books: [Book]) -> [Book] {
         var papers = Set<String>(), houses = Set<String>(), layouts = Set<String>(), shopPapers = Set<String>()
-        var imprints = Set<House.Imprint>(), paperKinds = Set<CoverStyle.Paper>()
+        var housesUsed: [Bool: Set<String>] = [true: [], false: []], paperKinds = Set<CoverStyle.Paper>()
+        let houseCount: [Bool: Int] = [true: House.Imprint.allCases.count, false: House.Imprint.allCases.count + EnglishHouse.all.count]
         var recentShops: [Int] = []
         var seriesLooks: [String: Int] = [:]
         var result = books
@@ -110,12 +124,14 @@ struct Look: Equatable {
                     }
                     // A new house and a new paper while there are any; then a new layout and shop paper;
                     // past those (45 layouts), anything nobody has. Don't search tiers already spent.
-                    let newHouses = imprints.count < House.Imprint.allCases.count
-                    let freshLeft = layouts.count < House.Imprint.allCases.count * 3
+                    let japanese = book.printsJapanese
+                    let used = housesUsed[japanese] ?? []
+                    let newHouses = used.count < houseCount[japanese] ?? 0
+                    let freshLeft = layouts.count < (House.Imprint.allCases.count * 2 + EnglishHouse.all.count) * 3
                     func newest(_ l: Look) -> Bool {
-                        fresh(l) && !imprints.contains(l.imprint) && (paperKinds.count >= Self.papers.count || !paperKinds.contains(l.paper))
+                        fresh(l) && !used.contains(l.houseKey) && (paperKinds.count >= Self.papers.count || !paperKinds.contains(l.paper))
                     }
-                    book.look = (newHouses ? (0..<400).first { newest(look($0)) } : nil)
+                    book.look = (newHouses ? (0..<800).first { newest(look($0)) } : nil)
                         ?? (freshLeft ? (0..<300).first { fresh(look($0)) } : nil)
                         ?? (0..<2000).first { distinct(look($0)) } ?? 0
                 }
@@ -125,7 +141,7 @@ struct Look: Equatable {
             papers.insert(look.paperSignature)
             houses.insert(look.houseSignature)
             layouts.insert(look.layoutSignature)
-            imprints.insert(look.imprint)
+            housesUsed[book.printsJapanese, default: []].insert(look.houseKey)
             paperKinds.insert(look.paper)
             shopPapers.insert(look.shopPaperSignature)
             recentShops = Array((recentShops + [look.shop]).suffix(4))
