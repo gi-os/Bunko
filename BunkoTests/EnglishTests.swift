@@ -127,3 +127,25 @@ struct SpineShelfTests {
         #expect(SpineShelf.width(characters: 50_000_000, japanese: true, id: "x") <= 58)
     }
 }
+
+final class VolumeStandIn: NSObject { @objc dynamic var level: Float = 0.5 }
+
+struct VolumeWatchTests {
+    /// The volume changes on the audio system's thread, not the main one: the watcher must take
+    /// that without stopping the app, and hand the value over.
+    @Test @MainActor func aChangeFromAnotherThreadReachesTheMainActor() async {
+        let volume = VolumeStandIn()
+        let received = Received()
+        let observation = VolumeButtons.watch(volume, \.level) { value in
+            Task { @MainActor in received.values.append(value) }
+        }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async { volume.level = 0.5625; done.resume() }
+        }
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(received.values == [0.5625])
+        observation.invalidate()
+    }
+
+    @MainActor final class Received { var values: [Float] = [] }
+}
