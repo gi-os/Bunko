@@ -4,7 +4,13 @@ import Foundation
 struct CoverStyle: Codable, Equatable {
     enum Paper: String, Codable, CaseIterable, Identifiable {
         case kraft, washi, linen, newsprint, indigo, sakura, matcha, basil, seigaiha, asanoha
+        // English bookshops' papers.
+        case brownpaper, ticking, pinstripe, awning, gingham, tartan, houndstooth, polka, harlequin, herringbone, chevron, graph, ledger, music, fleur, damask, sprig, stars, scales, ripple, ordnance, crossword, marbledpaper, trellis, quatrefoil, argyle, tissue, laid, airmail, windowpane
         var id: Self { self }
+
+        /// The thirty English papers, for English books (which also use the ten above).
+        static let english: [Paper] = [.brownpaper, .ticking, .pinstripe, .awning, .gingham, .tartan, .houndstooth, .polka, .harlequin, .herringbone, .chevron, .graph, .ledger, .music, .fleur, .damask, .sprig, .stars, .scales, .ripple, .ordnance, .crossword, .marbledpaper, .trellis, .quatrefoil, .argyle, .tissue, .laid, .airmail, .windowpane]
+        var isEnglish: Bool { Self.english.contains(self) }
 
         var label: String {
             switch self {
@@ -18,6 +24,36 @@ struct CoverStyle: Codable, Equatable {
             case .basil: "Basil"
             case .seigaiha: "Waves"
             case .asanoha: "Hemp leaf"
+            case .brownpaper: "Brown Paper"
+            case .ticking: "Ticking"
+            case .pinstripe: "Pinstripe"
+            case .awning: "Awning"
+            case .gingham: "Gingham"
+            case .tartan: "Tartan"
+            case .houndstooth: "Houndstooth"
+            case .polka: "Polka Dot"
+            case .harlequin: "Harlequin"
+            case .herringbone: "Herringbone"
+            case .chevron: "Chevron"
+            case .graph: "Graph Paper"
+            case .ledger: "Ledger"
+            case .music: "Music Paper"
+            case .fleur: "Fleur-de-lis"
+            case .damask: "Damask"
+            case .sprig: "Sprig"
+            case .stars: "Star Field"
+            case .scales: "Scales"
+            case .ripple: "Ripple"
+            case .ordnance: "Ordnance Map"
+            case .crossword: "Crossword"
+            case .marbledpaper: "Marbled"
+            case .trellis: "Trellis"
+            case .quatrefoil: "Quatrefoil"
+            case .argyle: "Argyle"
+            case .tissue: "Tissue"
+            case .laid: "Laid Paper"
+            case .airmail: "Airmail"
+            case .windowpane: "Windowpane"
             }
         }
 
@@ -33,6 +69,36 @@ struct CoverStyle: Codable, Equatable {
             case .basil: "5D7B4B"
             case .seigaiha: "ECE5D4"
             case .asanoha: "D6B878"
+            case .brownpaper: "B98E5F"
+            case .ticking: "F1ECDF"
+            case .pinstripe: "2C3140"
+            case .awning: "F2EBDC"
+            case .gingham: "F4EFE4"
+            case .tartan: "2F4A3A"
+            case .houndstooth: "EDE6D6"
+            case .polka: "B7322C"
+            case .harlequin: "E8DCC4"
+            case .herringbone: "D8CFBF"
+            case .chevron: "F0E8D8"
+            case .graph: "F3F1E8"
+            case .ledger: "EFE9D2"
+            case .music: "F2ECDC"
+            case .fleur: "1F3B5C"
+            case .damask: "7A2230"
+            case .sprig: "F3ECE0"
+            case .stars: "1C2541"
+            case .scales: "6E8B8E"
+            case .ripple: "E6ECEB"
+            case .ordnance: "EFE8D6"
+            case .crossword: "F5F2EA"
+            case .marbledpaper: "E7DCC8"
+            case .trellis: "EEF0E6"
+            case .quatrefoil: "EFE5D2"
+            case .argyle: "8E2F2A"
+            case .tissue: "F1DCDD"
+            case .laid: "EFE8D5"
+            case .airmail: "F3F2EE"
+            case .windowpane: "E9E2D2"
             }
         }
 
@@ -43,19 +109,49 @@ struct CoverStyle: Codable, Equatable {
             case .matcha: "3E4A2C"
             case .seigaiha: "2B4068"
             case .asanoha: "5A3A1E"
+            case .brownpaper: "3B2A1E"
+            case .ticking: "2B3F66"
+            case .pinstripe: "E9E4D6"
+            case .awning: "A8322D"
+            case .gingham: "3E6F9E"
+            case .tartan: "B03A2E"
+            case .houndstooth: "2A2622"
+            case .polka: "F3E9DA"
+            case .harlequin: "6B2D3F"
+            case .herringbone: "5A5148"
+            case .chevron: "2F6B5E"
+            case .graph: "6E95B8"
+            case .ledger: "4E7A9A"
+            case .music: "3A342C"
+            case .fleur: "D6B35A"
+            case .damask: "A6404F"
+            case .sprig: "6E8B5A"
+            case .stars: "E7D9A8"
+            case .scales: "EAE4D5"
+            case .ripple: "3F6F86"
+            case .ordnance: "A0703E"
+            case .crossword: "1E1C1A"
+            case .marbledpaper: "6B3A2A"
+            case .trellis: "4F7A55"
+            case .quatrefoil: "9A6A22"
+            case .argyle: "2F4F7F"
+            case .tissue: "B98A90"
+            case .laid: "B3A584"
+            case .airmail: "C8352E"
+            case .windowpane: "8E2F2A"
             default: "7A2E26"
             }
         }
 
         /// Plain papers are textured; patterned ones are printed all over in their ink, the way a
         /// bookshop prints its wrapping paper: 青海波 (waves) and 麻の葉 (hemp leaf).
-        enum Texture { case speckle, fibers, weave, lines, waves, hemp }
+        enum Texture { case speckle, fibers, weave, lines, waves, hemp, english }
 
         /// The real paper under it.
         var grain: Print.Grain {
             switch self {
-            case .linen, .kraft: .laid
-            case .washi, .sakura, .indigo: .crinkle
+            case .linen, .kraft, .brownpaper, .tartan, .herringbone, .ledger, .argyle, .laid: .laid
+            case .washi, .sakura, .indigo, .tissue: .crinkle
             default: .tooth
             }
         }
@@ -67,10 +163,23 @@ struct CoverStyle: Codable, Equatable {
             case .newsprint: .lines
             case .seigaiha: .waves
             case .asanoha: .hemp
+            default: .english
             }
         }
 
         var defaultStamp: String { self == .basil ? "BASIL BOOKS · LES" : "BUNKO" }
+
+        /// The stamp pad's ink: the paper's own, unless that would vanish into a busy print.
+        var stampInk: String {
+            switch self {
+            case .houndstooth, .chevron: "B5362A"
+            case .argyle, .damask: "EFE6D2"
+            case .tartan: "E9D58E"
+            case .polka: "2A1A16"
+            case .marbledpaper: "15130F"
+            default: ink
+            }
+        }
     }
 
     enum StampShape: String, Codable, CaseIterable, Identifiable {

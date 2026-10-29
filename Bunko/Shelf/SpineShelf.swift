@@ -260,7 +260,7 @@ struct BookSpine: View {
     /// The bookshop's paper as its cover has it: the kraft scan, or the paper's colour with its
     /// printed pattern (青海波, 麻の葉) at the cover's scale.
     private var wrapper: some View {
-        PaperPattern(style: style, coverWidth: coverWidth)
+        PaperPattern(style: style, coverWidth: coverWidth, seed: book.designKey)
             .overlay {
                 // This copy's paper came from a batch a shade lighter or darker, as its cover says.
                 let shade = Look.of(book).shade

@@ -8,7 +8,10 @@ struct Marbling: View {
     var bands = 26
 
     var body: some View {
-        Canvas { ctx, size in
+        Canvas { ctx, size in Self.draw(&ctx, size: size, seed: seed, colours: colours, bands: bands) }
+    }
+
+    static func draw(_ ctx: inout GraphicsContext, size: CGSize, seed: String, colours: [Color], bands: Int) {
             var rng = SeededRandom(string: seed + "marble")
             // Floated in thin bands, then combed: a fine zigzag over a slow swell.
             let count = bands * 3
@@ -38,7 +41,6 @@ struct Marbling: View {
                 ctx.stroke(edge, with: .color(Color(hex: "2A1E16").opacity(.random(in: 0.15...0.45, using: &rng))),
                            lineWidth: .random(in: 0.3...0.8, using: &rng))
             }
-        }
     }
 }
 

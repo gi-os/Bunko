@@ -221,7 +221,9 @@ struct CoverEditorView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Paper").font(.headline)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 12)], spacing: 14) {
-                ForEach(CoverStyle.Paper.allCases) { paper in
+                // An English book has the English bookshops' papers first, then the ten; a Japanese book the ten.
+                ForEach(book.printsJapanese ? CoverStyle.Paper.allCases.filter { !$0.isEnglish }
+                                            : CoverStyle.Paper.english + CoverStyle.Paper.allCases.filter { !$0.isEnglish }) { paper in
                     Button {
                         let customStamp = style.stamp != style.paper.defaultStamp
                         style.paper = paper
