@@ -92,6 +92,9 @@ struct BookSpine: View {
     private var english: Bool { !book.printsJapanese }
     private var house: House { .of(book, imprint: style.house) }
     private var colour: Color { Color(hex: house.colour) }
+    /// Which of its house's three layouts this copy wears, as its cover does.
+    private var variant: Int { house.variant % 3 }
+    private var coverWidth: CGFloat { Self.height * 105 / 148 }
     private let cream = Color(hex: "F5F0E4")
     private let ink = Color(hex: "26221D")
 
@@ -158,21 +161,30 @@ struct BookSpine: View {
         case .shirasagi:
             VStack(spacing: gap) {
                 SpineText(book.title, vertical: japanese, size: w * 0.5, bold: true, colour: cream)
-                    .padding(.vertical, h * 0.03).frame(maxHeight: .infinity).frame(width: w).background(colour)
+                    .padding(.vertical, h * 0.03).frame(maxHeight: h * [0.5, 0.42, 0.6][variant]).frame(width: w).background(colour)
                 author(colour, false)
+                Spacer(minLength: 0)
                 shelfCode(colour)
                 foot(colour)
             }
             .frame(width: w, height: h).background(cream)
         case .tsukikage:
             VStack(spacing: gap) {
-                Rectangle().fill(cream.opacity(0.8)).frame(height: 0.8).padding(.top, h * 0.03)
+                VStack(spacing: 1.5) {
+                    Rectangle().fill(cream.opacity(0.8)).frame(height: variant == 1 ? 1.8 : 0.8)
+                    if variant == 0 { Rectangle().fill(cream.opacity(0.8)).frame(height: 0.5) }
+                }
+                .opacity(variant == 2 ? 0 : 1)
+                .padding(.top, h * 0.03)
                 SpineText(book.title, vertical: japanese, size: w * 0.5, bold: true, colour: cream).frame(maxHeight: .infinity)
                 author(cream.opacity(0.85), false)
                 shelfCode(cream)
                 foot(cream)
             }
             .frame(width: w, height: h).background(colour)
+            .overlay {
+                if variant == 2 { RoundedRectangle(cornerRadius: 3).stroke(cream.opacity(0.8), lineWidth: 0.7).padding(2.5) }
+            }
         case .seirin:
             VStack(spacing: gap) {
                 Rectangle().fill(colour).frame(height: h * 0.035)
@@ -180,11 +192,14 @@ struct BookSpine: View {
                 author(colour, false)
                 foot(cream).padding(.top, 3).frame(maxWidth: .infinity).background(colour)
             }
-            .frame(width: w, height: h).background(cream)
+            .frame(width: w, height: h)
+            .background(variant == 1 ? Color(uiColor: UIColor(hex: house.colour).mixed(with: UIColor(cream), 0.78)) : cream)
         case .chidori:
             VStack(spacing: gap) {
                 // 矢絣, as the cover prints it.
-                ArrowFeathers(column: w / 3).fill(colour).frame(height: h * 0.1).clipped()
+                ArrowFeathers(column: coverWidth * [0.14, 0.1, 0.19][variant]).fill(colour)
+                    .rotationEffect(.degrees(variant == 2 ? 180 : 0))
+                    .frame(height: h * 0.1).clipped()
                 SpineText(book.title, vertical: japanese, size: w * 0.48, bold: true, colour: ink).frame(maxHeight: .infinity)
                 author(colour, false)
                 shelfCode(colour)
@@ -241,7 +256,12 @@ struct BookSpine: View {
     /// The bookshop's paper as its cover has it: the kraft scan, or the paper's colour with its
     /// printed pattern (青海波, 麻の葉) at the cover's scale.
     private var wrapper: some View {
-        PaperPattern(style: style, coverWidth: Self.height * 105 / 148)
+        PaperPattern(style: style, coverWidth: coverWidth)
+            .overlay {
+                // This copy's paper came from a batch a shade lighter or darker, as its cover says.
+                let shade = Look.of(book).shade
+                if style.tint == nil && shade != 0 { (shade < 0 ? Color.white : .black).opacity(0.07) }
+            }
     }
 
     /// The scanned grain at the scale it has on this book's cover, so spine and cover are one paper.
@@ -367,14 +387,14 @@ extension BookSpine {
             // Parchment, ruled and set with diamonds at head and foot, as the ornamental frame.
             let brown = Color(hex: "4A3524")
             VStack(spacing: gap) {
-                rules(brown, diamond: true).padding(.top, h * 0.025)
+                rules(brown, diamond: variant != 2).padding(.top, h * 0.025)
                 title(brown, false).frame(maxHeight: .infinity)
                 byline(brown)
                 shelfCode(brown)
                 foot(brown)
-                rules(brown, diamond: true).padding(.bottom, h * 0.02)
+                rules(brown, diamond: variant != 2).padding(.bottom, h * 0.02)
             }
-            .frame(width: w, height: h).background(Color(hex: "E9DDC2"))
+            .frame(width: w, height: h).background(Color(hex: ["E9DDC2", "E3D3B1", "EFE6D2"][variant]))
         case .watoji:
             // Stab-bound: the thread passes round the spine at each hole, silk over its corners,
             // and the title is on a pasted slip.
@@ -387,7 +407,7 @@ extension BookSpine {
                         thread.move(to: CGPoint(x: 0, y: y))
                         thread.addLine(to: CGPoint(x: size.width, y: y))
                         ctx.stroke(thread.offsetBy(dx: 0, dy: 0.8), with: .color(.black.opacity(0.35)), lineWidth: 1.4)
-                        ctx.stroke(thread, with: .color(Color(hex: "EDE6D4")), lineWidth: 1.4)
+                        ctx.stroke(thread, with: .color(Color(hex: ["EDE6D4", "B5362A", "D9B65A"][variant])), lineWidth: 1.4)
                     }
                     let k = size.width * 0.5
                     for y in [0, size.height - k] {
@@ -406,7 +426,7 @@ extension BookSpine {
         case .kirara:
             // A quiet printed spine under crinkled glassine catching the light.
             ZStack {
-                cream
+                [cream, Color(uiColor: UIColor(hex: house.colour).mixed(with: .white, 0.8)), Color(hex: "FBFAF6")][variant]
                 VStack(spacing: gap) {
                     title(ink, false).frame(maxHeight: .infinity).padding(.top, h * 0.05)
                     byline(colour)
@@ -426,8 +446,9 @@ extension BookSpine {
             .compositingGroup() // the glassine blends with the cover under it, nothing else
         case .kinu:
             // Dark bookcloth, its weave in it; title, rules and colophon stamped in gold foil.
-            let gold = LinearGradient(colors: [Color(hex: "9C7A2E"), Color(hex: "E9D58E"), Color(hex: "B8933F"), Color(hex: "F3E6B0"), Color(hex: "8E6E28")],
-                                      startPoint: .top, endPoint: .bottom)
+            let foils = [["9C7A2E", "E9D58E", "B8933F", "F3E6B0", "8E6E28"], ["7D8086", "E6E8EB", "A5A9AF", "F5F6F7", "6E7177"],
+                         ["8A4B2C", "E3A07A", "A8623E", "F0C3A4", "7A3F24"]]
+            let gold = LinearGradient(colors: foils[variant].map { Color(hex: $0) }, startPoint: .top, endPoint: .bottom)
             ZStack {
                 colour
                 Color.black.opacity(0.58)
@@ -451,7 +472,7 @@ extension BookSpine {
             .compositingGroup() // the weave blends with the cloth, nothing else
         case .shimo:
             // Pale paper; the title has no ink, only relief.
-            let paper = Color(uiColor: UIColor(hex: house.colour).mixed(with: .white, 0.72))
+            let paper = Color(uiColor: UIColor(hex: house.colour).mixed(with: .white, [0.72, 0.6, 0.83][variant]))
             VStack(spacing: gap) {
                 ZStack {
                     title(.white.opacity(0.55), false).offset(x: -0.4, y: -0.4)
@@ -467,7 +488,9 @@ extension BookSpine {
             // The halftone sun, screened in the author's colour, at the head.
             VStack(spacing: gap) {
                 Canvas { ctx, size in
-                    let centre = CGPoint(x: size.width / 2, y: size.height / 2), radius = size.width * 0.48, pitch: CGFloat = 2.4
+                    let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+                    let radius = size.width * 0.48 * [1, 0.82, 1.15][variant]
+                    let pitch = max(2, coverWidth * [0.016, 0.013, 0.021][variant])
                     let n = Int(radius * 1.5 / pitch)
                     var dots = Path()
                     for i in -n...n {
@@ -493,9 +516,20 @@ extension BookSpine {
             let second = Color(hex: house.colour == "9A6A22" ? "2F6F8F" : "D9A62E")
             VStack(spacing: gap) {
                 ZStack {
-                    Circle().fill(colour).frame(width: w * 0.8, height: w * 0.8).offset(y: -w * 0.12)
-                    Rectangle().fill(second).frame(width: w * 0.62, height: w * 0.62).offset(x: w * 0.12 + 0.7, y: w * 0.18 + 0.5)
-                        .blendMode(.multiply)
+                    switch variant {
+                    case 0:
+                        Circle().fill(colour).frame(width: w * 0.8, height: w * 0.8).offset(y: -w * 0.12)
+                        Rectangle().fill(second).frame(width: w * 0.62, height: w * 0.62).offset(x: w * 0.12 + 0.7, y: w * 0.18 + 0.5)
+                            .blendMode(.multiply)
+                    case 1:
+                        Circle().fill(colour).frame(width: w * 0.66, height: w * 0.66).offset(x: -w * 0.1, y: -w * 0.14)
+                        Circle().fill(second).frame(width: w * 0.66, height: w * 0.66).offset(x: w * 0.12 + 0.7, y: w * 0.16 + 0.5)
+                            .blendMode(.multiply)
+                    default:
+                        Rectangle().fill(colour).frame(width: w * 0.8, height: w * 0.42).offset(y: -w * 0.2)
+                        Triangle().fill(second).frame(width: w * 0.66, height: w * 0.62).offset(x: 0.7, y: w * 0.16 + 0.5)
+                            .blendMode(.multiply)
+                    }
                 }
                 .compositingGroup()
                 .frame(width: w, height: w * 1.15).clipped().padding(.top, h * 0.03)
@@ -506,22 +540,24 @@ extension BookSpine {
             .frame(width: w, height: h).background(cream)
         case .kodama:
             // A woodcut block, its grain in the ink and its edges rough, the title cut out of it.
+            let inverted = variant == 2
             VStack(spacing: gap) {
                 ZStack {
-                    colour
+                    inverted ? cream : colour
                     Canvas { ctx, size in
                         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .tiledImage(Image(uiImage: Print.Grain.laid.image), scale: coverScale * 1.6))
                     }
                     .blendMode(.overlay)
-                    title(cream, false).padding(.vertical, 6)
+                    title(inverted ? colour : cream, false).padding(.vertical, 6)
                 }
+                .compositingGroup()
                 .clipShape(RoughRect(seed: book.id))
                 .padding(3)
                 .frame(maxHeight: .infinity)
-                byline(colour)
-                foot(colour)
+                byline(inverted ? cream : colour)
+                foot(inverted ? cream : colour)
             }
-            .frame(width: w, height: h).background(cream)
+            .frame(width: w, height: h).background(inverted ? colour : cream)
         case .namari:
             // Letterpress: rules at head and foot, the type bitten in, light under each impression.
             VStack(spacing: gap) {
@@ -531,7 +567,7 @@ extension BookSpine {
                     title(ink, false)
                 }
                 .frame(maxHeight: .infinity)
-                Text("◇").font(.system(size: 6)).foregroundStyle(colour)
+                Text(["◇", "❖", "※"][variant]).font(.system(size: 6)).foregroundStyle(colour)
                 byline(ink)
                 shelfCode(ink)
                 foot(ink)
@@ -541,7 +577,7 @@ extension BookSpine {
         case .aizome:
             // Indigo shibori: pale resist rings where the cloth was bound, the title on a pasted slip.
             ZStack {
-                Color(hex: "203556")
+                Color(hex: ["203556", "1A2A44", "2C4870"][variant])
                 Canvas { ctx, size in
                     var rng = SeededRandom(string: book.id + "shibori")
                     var y: CGFloat = 6
