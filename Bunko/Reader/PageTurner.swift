@@ -65,9 +65,17 @@ struct PageTurner: UIViewControllerRepresentable {
         private var lastJump: UUID?
         private var turning = false
 
+        /// The arrangement this pager was built for. Its spine can't change, so when the book is
+        /// re-cut for another (unfolding the Duo turns single pages into spreads), SwiftUI builds a
+        /// new pager; until it does, this one is still updated and must not be handed the other
+        /// arrangement's pages (UIKit stops the app when the count doesn't fit the spine).
+        private let builtFor: SpreadLayout
+        private var current: Bool { layout.arrangedLike(builtFor) }
+
         init(model: ReaderModel, curl: Bool) {
             self.model = model
             self.curl = curl
+            builtFor = model.layout
         }
 
         private var layout: SpreadLayout { model.layout }
@@ -99,14 +107,15 @@ struct PageTurner: UIViewControllerRepresentable {
         }
 
         func show(page: Int) {
-            guard let pager, layout.pageCount > 0 else { return }
+            guard let pager, current, layout.pageCount > 0 else { return }
             let controllers: [UnitController]
             if curl && layout.spread {
                 controllers = layout.pages(inSpread: layout.spreadIndex(ofPage: page)).compactMap { controller(unit: $0) }
             } else {
                 controllers = [controller(unit: curl ? page : layout.spreadIndex(ofPage: page))].compactMap { $0 }
             }
-            guard !controllers.isEmpty else { return }
+            // Two for a curling spread (one each side of the spine), otherwise one.
+            guard controllers.count == (curl && layout.spread ? 2 : 1) else { return }
             pager.setViewControllers(controllers, direction: .forward, animated: false)
             shownVersion = model.pagesVersion
         }
@@ -122,18 +131,20 @@ struct PageTurner: UIViewControllerRepresentable {
         }
 
         func pageViewController(_ pager: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
+            guard current else { return nil }
             guard let unit = (vc as? UnitController)?.unit else { return nil }
             return controller(unit: reversed ? unit + 1 : unit - 1)
         }
 
         func pageViewController(_ pager: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? {
+            guard current else { return nil }
             guard let unit = (vc as? UnitController)?.unit else { return nil }
             return controller(unit: reversed ? unit - 1 : unit + 1)
         }
 
         func pageViewController(_ pager: UIPageViewController, didFinishAnimating finished: Bool,
                                 previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
-            guard completed else { return }
+            guard completed, current else { return }
             let units = (pager.viewControllers ?? []).compactMap { ($0 as? UnitController)?.unit }
             guard let first = units.min() else { return }
             let page = curl ? first : (layout.pages(inSpread: first).min() ?? 0)
@@ -158,7 +169,7 @@ struct PageTurner: UIViewControllerRepresentable {
 
         /// The next page (or spread), turned the way a swipe would turn it.
         func turnForward() {
-            guard let pager, !turning, !model.isClosed, layout.pageCount > 0 else { return }
+            guard let pager, current, !turning, !model.isClosed, layout.pageCount > 0 else { return }
             let spread = layout.spreadIndex(ofPage: model.currentPage) + 1
             guard spread < layout.spreadCount, let page = layout.pages(inSpread: spread).filter({ $0 < layout.pageCount }).min() else { return }
             let units = curl ? layout.pages(inSpread: spread) : [spread]
