@@ -37,7 +37,7 @@ struct CoverView: View {
                 .overlay(Image(uiImage: original).resizable().scaledToFill())
                 .clipped()
         } else {
-            HouseCover(book: book, large: large, imprint: style.house).printed(strength: large ? 1 : 0.75)
+            HouseCover(book: book, large: large, imprint: style.house, edition: style.edition).printed(strength: large ? 1 : 0.75)
         }
     }
 }

@@ -87,7 +87,7 @@ struct LookHouseTests {
                  rightToLeft: i.isMultiple(of: 2), addedAt: start.addingTimeInterval(Double(i)))
         })
         let looks = books.map(Look.of)
-        #expect(Set(looks.map(\.imprint)).count == 15)
+        #expect(Set(looks.map(\.houseKey)).count == 15)
         #expect(Set(looks.prefix(9).map(\.paper)).count == 9)
     }
 }
