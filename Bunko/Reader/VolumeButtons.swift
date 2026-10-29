@@ -25,9 +25,19 @@ final class VolumeButtons {
         original = session.outputVolume
         resting = VolumeLevel.resting(original)
         if resting != original { set(resting) }
-        observation = session.observe(\.outputVolume, options: [.new]) { [weak self] _, change in
-            guard let value = change.newValue else { return }
+        observation = Self.watch(session, \.outputVolume) { [weak self] value in
             Task { @MainActor in self?.changed(to: value) }
+        }
+    }
+
+    /// KVO reports a change on whatever thread made it, and the volume's comes from the audio
+    /// system's own. A handler written in here would belong to the main actor, and Swift stops the
+    /// app when one runs anywhere else (it did, opening and closing books, on the phone). This one
+    /// belongs to no actor: it only hands the value over.
+    nonisolated static func watch<Object: NSObject>(_ object: Object, _ keyPath: KeyPath<Object, Float>,
+                                                   report: @escaping @Sendable (Float) -> Void) -> NSKeyValueObservation {
+        object.observe(keyPath, options: [.new]) { _, change in
+            if let value = change.newValue { report(value) }
         }
     }
 
