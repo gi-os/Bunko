@@ -30,8 +30,10 @@ struct Look: Equatable {
         Shop(stamp: "HALF MOON BOOKS", shape: .circle), Shop(stamp: "QUIET HOURS", shape: .seal),
     ]
 
-    /// Papers a shop might wrap a book in (Basil's is Basil Books' own).
-    static let papers = CoverStyle.Paper.allCases.filter { $0 != .basil }
+    /// Papers a Japanese shop might wrap a book in (Basil's is Basil Books' own).
+    static let papers: [CoverStyle.Paper] = [.kraft, .washi, .linen, .newsprint, .indigo, .sakura, .matcha, .seigaiha, .asanoha]
+    /// An English shop has those and thirty of its own.
+    static let englishPapers: [CoverStyle.Paper] = papers + CoverStyle.Paper.english
 
     /// A publisher's colours, from the traditional ones: brick, indigo, evergreen, ochre,
     /// purple, sumi, peony, celadon, persimmon, olive, 納戸, umber, yamabuki, slate, grape, bamboo.
@@ -76,6 +78,8 @@ struct Look: Equatable {
         if !book.printsJapanese {
             let draw = Int.random(in: 0..<(House.Imprint.allCases.count + EnglishHouse.all.count), using: &rng)
             if draw >= House.Imprint.allCases.count { look.edition = EnglishHouse.all[draw - House.Imprint.allCases.count] }
+            // And from thirty-nine papers: the nine above and thirty English ones.
+            look.paper = englishPapers[Int.random(in: 0..<englishPapers.count, using: &rng)]
         }
         return look
     }
@@ -104,8 +108,8 @@ struct Look: Equatable {
     /// they already have, so nothing changes under you.
     static func assign(_ books: [Book]) -> [Book] {
         var papers = Set<String>(), houses = Set<String>(), layouts = Set<String>(), shopPapers = Set<String>()
-        var housesUsed: [Bool: Set<String>] = [true: [], false: []], paperKinds = Set<CoverStyle.Paper>()
-        let houseCount: [Bool: Int] = [true: House.Imprint.allCases.count, false: House.Imprint.allCases.count + EnglishHouse.all.count]
+        // A Japanese house and its English edition are one design, so they share a key.
+        var housesUsed = Set<String>(), paperKinds = Set<CoverStyle.Paper>()
         var recentShops: [Int] = []
         var seriesLooks: [String: Int] = [:]
         var result = books
@@ -125,11 +129,14 @@ struct Look: Equatable {
                     // A new house and a new paper while there are any; then a new layout and shop paper;
                     // past those (45 layouts), anything nobody has. Don't search tiers already spent.
                     let japanese = book.printsJapanese
-                    let used = housesUsed[japanese] ?? []
-                    let newHouses = used.count < houseCount[japanese] ?? 0
+                    let used = housesUsed
+                    let newHouses = japanese
+                        ? used.filter { !$0.hasPrefix("en:") }.count < House.Imprint.allCases.count
+                        : used.count < House.Imprint.allCases.count + EnglishHouse.all.count
                     let freshLeft = layouts.count < (House.Imprint.allCases.count * 2 + EnglishHouse.all.count) * 3
                     func newest(_ l: Look) -> Bool {
-                        fresh(l) && !used.contains(l.houseKey) && (paperKinds.count >= Self.papers.count || !paperKinds.contains(l.paper))
+                        let paperCount = japanese ? Self.papers.count : Self.englishPapers.count
+                        return fresh(l) && !used.contains(l.houseKey) && (paperKinds.count >= paperCount || !paperKinds.contains(l.paper))
                     }
                     book.look = (newHouses ? (0..<800).first { newest(look($0)) } : nil)
                         ?? (freshLeft ? (0..<300).first { fresh(look($0)) } : nil)
@@ -141,7 +148,7 @@ struct Look: Equatable {
             papers.insert(look.paperSignature)
             houses.insert(look.houseSignature)
             layouts.insert(look.layoutSignature)
-            housesUsed[book.printsJapanese, default: []].insert(look.houseKey)
+            housesUsed.insert(look.houseKey)
             paperKinds.insert(look.paper)
             shopPapers.insert(look.shopPaperSignature)
             recentShops = Array((recentShops + [look.shop]).suffix(4))

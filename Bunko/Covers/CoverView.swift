@@ -62,11 +62,14 @@ struct PaperCover: View {
         Canvas { ctx, size in
             let rect = CGRect(origin: .zero, size: size)
             var rng = SeededRandom(string: book.id + style.paper.rawValue)
-            if style.paper == .kraft && style.tint == nil {
-                // The real thing: a scan of ribbed kraft wrapping paper.
+            if (style.paper == .kraft || style.paper == .brownpaper) && style.tint == nil {
+                // The real thing: a scan of ribbed kraft wrapping paper (a bookseller's bag, printed).
                 ctx.fill(Path(rect), with: .tiledImage(Image(uiImage: Print.kraft), origin: CGPoint(x: -look.phase * size.width, y: 0),
                                                        scale: Print.tileScale(coverWidth: size.width)))
                 if look.shade != 0 { ctx.fill(Path(rect), with: .color((look.shade < 0 ? Color.white : .black).opacity(0.07))) }
+                if style.paper == .brownpaper {
+                    EnglishPapers.draw(.brownpaper, in: &ctx, size: size, w: size.width, base: Color(uiColor: base), ink: ink, seed: book.id)
+                }
             } else {
                 ctx.fill(Path(rect), with: .color(Color(uiColor: base)))
                 drawTexture(&ctx, size: size, rng: &rng, base: Color(uiColor: base), ink: ink)
@@ -97,7 +100,7 @@ struct PaperCover: View {
             switch style.stampShape {
             case .none: break
             case .seal: drawSeal(&ctx, size: size, unit: unit)
-            case .circle, .square: drawStamp(&ctx, size: size, ink: ink, unit: unit)
+            case .circle, .square: drawStamp(&ctx, size: size, ink: Color(hex: style.paper.stampInk), unit: unit)
             }
         }
         // Patterns are drawn past the edges so they tile cleanly; the paper ends where the book does.
@@ -138,6 +141,14 @@ struct PaperCover: View {
         case .weave, .lines:
             // Bookcloth and newsprint are all in their scanned grain.
             break
+        case .english:
+            // Off the roll wherever it was cut.
+            // A printed border (airmail) sits where it was printed.
+            var printed = ctx
+            let border = style.paper == .airmail
+            if !border { printed.translateBy(x: -look.phase * size.width * 0.2, y: -look.phase * size.width * 0.13) }
+            EnglishPapers.draw(style.paper, in: &printed, size: border ? size : CGSize(width: size.width * 1.3, height: size.height * 1.2),
+                               w: size.width, base: base, ink: ink, seed: book.designKey)
         }
     }
 
@@ -432,24 +443,30 @@ struct PaperCover: View {
     }
 }
 
-/// A paper's colour and printed pattern alone (青海波, 麻の葉), at the size it has on a cover
-/// `coverWidth` wide: for a spine cut from the same paper.
+/// A paper's colour and printed pattern alone (青海波, 麻の葉, the English papers), at the size it
+/// has on a cover `coverWidth` wide: for a spine cut from the same paper.
 struct PaperPattern: View {
     let style: CoverStyle
     let coverWidth: CGFloat
+    /// The book's `designKey`, so a seeded print (stars, a map, marbling) matches its cover.
+    var seed = ""
 
     var body: some View {
         Canvas { ctx, size in
             let base = Color(hex: style.baseHex), ink = Color(hex: style.paper.ink)
-            if style.paper == .kraft && style.tint == nil {
+            if (style.paper == .kraft || style.paper == .brownpaper) && style.tint == nil {
                 ctx.fill(Path(CGRect(origin: .zero, size: size)),
                          with: .tiledImage(Image(uiImage: Print.kraft), scale: Print.tileScale(coverWidth: coverWidth)))
+                if style.paper == .brownpaper {
+                    EnglishPapers.draw(.brownpaper, in: &ctx, size: size, w: coverWidth, base: base, ink: ink, seed: seed)
+                }
                 return
             }
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(base))
             switch style.paper.texture {
             case .waves: PaperCover.drawWaves(&ctx, size: size, scale: coverWidth, base: base, ink: ink)
             case .hemp: PaperCover.drawHemp(&ctx, size: size, scale: coverWidth, ink: ink)
+            case .english: EnglishPapers.draw(style.paper, in: &ctx, size: size, w: coverWidth, base: base, ink: ink, seed: seed)
             default: break
             }
         }

@@ -29,7 +29,8 @@ struct LookTests {
 
     @Test func aSeriesWearsOneLook() {
         let books = Look.assign(shelf(300))
-        let dune = books.filter { $0.volume?.series == "Dune" }
+        // A series is in one language; this shelf alternates, so compare the English volumes.
+        let dune = books.filter { $0.volume?.series == "Dune" && !$0.printsJapanese }
         #expect(dune.count > 1)
         #expect(Set(dune.map(\.look)).count == 1)
         #expect(Set(dune.map { CoverStyle.automatic(for: $0) }.map(\.paper)).count == 1)
