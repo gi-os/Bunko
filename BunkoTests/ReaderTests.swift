@@ -28,6 +28,13 @@ struct SpreadLayoutTests {
         #expect(ltr.edgeFractions(atPage: 5) == (left: 0.5, right: 0.5))
     }
 
+    @Test func unfoldingIsANewArrangementButRecuttingIsNot() {
+        let folded = SpreadLayout(pageCount: 120, spread: false, rightToLeft: true)
+        #expect(folded.arrangedLike(SpreadLayout(pageCount: 80, spread: false, rightToLeft: true)))
+        #expect(!folded.arrangedLike(SpreadLayout(pageCount: 80, spread: true, rightToLeft: true)))
+        #expect(!folded.arrangedLike(SpreadLayout(pageCount: 120, spread: false, rightToLeft: false)))
+    }
+
     @Test func lastPageCountsInTheLastSpread() {
         // The last spread's current page is its first, so a spread finishes a page early.
         let spread = SpreadLayout(pageCount: 10, spread: true, rightToLeft: true)

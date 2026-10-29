@@ -23,6 +23,10 @@ struct SpreadLayout: Equatable {
     /// The book's binding: the right edge for a right-to-left single page.
     var bindingOnRight: Bool { rightToLeft }
 
+    /// The same arrangement (one page or a spread, bound on the same side), whatever the page count:
+    /// what a page turner, built for one, can be handed.
+    func arrangedLike(_ other: SpreadLayout) -> Bool { spread == other.spread && rightToLeft == other.rightToLeft }
+
     /// Whether the screen showing `page` also shows the book's last page (in a spread, the last
     /// spread's first page is the current one).
     func showsLastPage(atPage page: Int) -> Bool {
