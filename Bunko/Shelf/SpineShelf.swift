@@ -90,7 +90,7 @@ struct BookSpine: View {
     private var japanese: Bool { book.setVertically }
     /// An English edition: the house's English name and colophon letter, as its cover has them.
     private var english: Bool { !book.printsJapanese }
-    private var house: House { .of(book, imprint: style.house) }
+    private var house: House { .of(book, imprint: style.house, edition: style.edition.flatMap(EnglishHouse.with(id:))) }
     private var colour: Color { Color(hex: house.colour) }
     /// Which of its house's three layouts this copy wears, as its cover does.
     private var variant: Int { house.variant % 3 }
@@ -145,7 +145,11 @@ struct BookSpine: View {
             .frame(width: w, height: h)
             .background(tone.background)
         } else {
-            houseFace(w: w, h: h)
+            if let edition = house.edition {
+                editionFace(edition.spine(colour: house.colour, variant: house.variant), w: w, h: h)
+            } else {
+                houseFace(w: w, h: h)
+            }
         }
     }
 
@@ -299,9 +303,11 @@ struct SpineText: View {
     var gothic = false
     /// Letter-spacing for lettering run on its side (an English imprint in capitals).
     var tracking: CGFloat = 0
+    /// An English house's own typeface (Gill Sans, Didot, Rockwell…), instead of Bunko's.
+    var face: EnglishHouse.Face?
 
     init<Ink: ShapeStyle>(_ text: String, vertical: Bool, size: CGFloat, bold: Bool, colour: Ink, gothic: Bool = false,
-                          tracking: CGFloat = 0) {
+                          tracking: CGFloat = 0, face: EnglishHouse.Face? = nil) {
         self.text = text
         self.vertical = vertical
         self.size = size
@@ -309,6 +315,7 @@ struct SpineText: View {
         self.colour = AnyShapeStyle(colour)
         self.gothic = gothic
         self.tracking = tracking
+        self.face = face
     }
 
     var body: some View {
@@ -343,13 +350,14 @@ struct SpineText: View {
 
     /// The size that sets the whole of `text` on one line no longer than `length`.
     private func fitted(to length: CGFloat) -> CGFloat {
-        let uiFont = gothic ? UIFont.systemFont(ofSize: size, weight: bold ? .heavy : .regular)
-                            : Typesetter.font(.serif, size: size, bold: bold)
+        let uiFont = face?.uiFont(size: size, bold: bold)
+            ?? (gothic ? UIFont.systemFont(ofSize: size, weight: bold ? .heavy : .regular) : Typesetter.font(.serif, size: size, bold: bold))
         let width = (text as NSString).size(withAttributes: [.font: uiFont, .kern: tracking]).width
         return width > length && width > 0 ? size * length / width : size
     }
 
     private func font(_ points: CGFloat) -> Font {
+        if let face { return face.font(size: points, bold: bold) }
         if gothic { return .system(size: points, weight: bold ? .heavy : .regular) }
         return Typesetter.swiftUIFont(vertical ? .mincho : .serif, size: points, bold: bold)
     }
@@ -623,5 +631,189 @@ extension BookSpine {
             Rectangle().fill(colour).frame(height: 0.5)
         }
         .padding(.horizontal, 3)
+    }
+}
+
+// MARK: The English houses
+
+extension BookSpine {
+    /// An English house's spine, drawn from its recipe: the stock and its texture (laid, cloth,
+    /// pulp, marbled, a patterned board), its bands, its rules, foil or ink, and its own typeface;
+    /// title and author run down it, then the catalogue number, the monogram in its ring and the
+    /// house's name, as on its cover.
+    func editionFace(_ recipe: SpineRecipe, w: CGFloat, h: CGFloat) -> some View {
+        let foiled = recipe.foil != .none
+        let foil = LinearGradient(colors: recipe.foil.colours, startPoint: .top, endPoint: .bottom)
+        return ZStack {
+            Color(hex: recipe.stock)
+            editionTexture(recipe, w: w, h: h)
+            Canvas { ctx, size in
+                for band in recipe.bands {
+                    ctx.fill(Path(CGRect(x: 0, y: size.height * band.from, width: size.width,
+                                         height: size.height * (band.to - band.from))), with: .color(Color(hex: band.colour)))
+                }
+            }
+            // Where the lettering crosses a band it's printed in an ink that reads on the band, as a
+            // printer knocks type out of a colour: one pass per stretch of the spine's background.
+            ForEach(Array(SpineInk.stretches(of: recipe.bands).enumerated()), id: \.offset) { _, stretch in
+                let ink = SpineInk.ink(on: stretch.colour ?? recipe.stock, house: recipe.ink, stock: recipe.stock)
+                editionLettering(recipe, letters: foiled ? AnyShapeStyle(foil) : AnyShapeStyle(Color(hex: ink)), w: w, h: h)
+                    .mask {
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: h * stretch.from)
+                            Color.black.frame(height: h * (stretch.to - stretch.from))
+                            Spacer(minLength: 0)
+                        }
+                    }
+            }
+            .shadow(color: foiled ? .black.opacity(0.45) : .clear, radius: 0, x: 0.3, y: 0.6)
+        }
+        .frame(width: w, height: h)
+        .compositingGroup()
+    }
+
+    /// Title and author down the spine, then the catalogue number, the monogram in its ring and
+    /// the house's name, between the rules.
+    private func editionLettering(_ recipe: SpineRecipe, letters: AnyShapeStyle, w: CGFloat, h: CGFloat) -> some View {
+        VStack(spacing: h * 0.018) {
+            editionRules(recipe.rules, style: letters).padding(.top, h * 0.03)
+            SpineText(book.title, vertical: false, size: w * 0.48, bold: true, colour: letters, face: recipe.face)
+                .frame(maxHeight: .infinity)
+            SpineText(book.author, vertical: false, size: w * 0.32, bold: false, colour: letters, face: recipe.face)
+                .frame(height: h * 0.15)
+            if let ornament = recipe.ornament {
+                Text(ornament).font(.system(size: 6)).foregroundStyle(letters)
+            }
+            Text(house.catalogue).font(recipe.face.font(size: 5, bold: false)).foregroundStyle(letters)
+                .lineLimit(1).fixedSize()
+                .rotationEffect(.degrees(90)).frame(height: 24)
+            Text(recipe.colophon)
+                .font(recipe.face.font(size: 6.5, bold: true))
+                .foregroundStyle(letters)
+                .frame(width: 11, height: 11)
+                .overlay(Circle().stroke(letters, lineWidth: 0.6))
+            SpineText(recipe.name.uppercased(), vertical: false, size: 6, bold: true, colour: letters, tracking: 0.6, face: recipe.face)
+                .frame(height: 48)
+            editionRules(recipe.rules, style: letters).padding(.bottom, h * 0.025)
+        }
+        .frame(width: w, height: h)
+    }
+
+    @ViewBuilder private func editionRules(_ rules: EnglishHouse.Rules, style: AnyShapeStyle) -> some View {
+        switch rules {
+        case .none: EmptyView()
+        case .single: Rectangle().fill(style).frame(height: 0.7).padding(.horizontal, 3)
+        case .heavy: Rectangle().fill(style).frame(height: 1.8).padding(.horizontal, 3)
+        case .double:
+            VStack(spacing: 1.2) {
+                Rectangle().fill(style).frame(height: 1)
+                Rectangle().fill(style).frame(height: 0.5)
+            }
+            .padding(.horizontal, 3)
+        }
+    }
+
+    /// The stock's surface: laid lines, a cloth weave, pulp's speckle, marbling, or a board's repeat.
+    @ViewBuilder private func editionTexture(_ recipe: SpineRecipe, w: CGFloat, h: CGFloat) -> some View {
+        switch recipe.texture {
+        case .paper:
+            EmptyView()
+        case .laid:
+            Canvas { ctx, size in
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .tiledImage(Image(uiImage: Print.Grain.laid.image), scale: coverScale))
+            }
+            .blendMode(.softLight)
+        case .cloth:
+            Canvas { ctx, size in
+                let scale = coverScale * 0.5
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .tiledImage(Image(uiImage: Print.Grain.laid.image), scale: scale))
+                var across = ctx
+                across.opacity = 0.5
+                across.rotate(by: .degrees(90))
+                across.fill(Path(CGRect(x: 0, y: -size.width, width: size.height, height: size.width)),
+                            with: .tiledImage(Image(uiImage: Print.Grain.laid.image), scale: scale))
+            }
+            .blendMode(.softLight)
+        case .pulp:
+            Canvas { ctx, size in
+                var rng = SeededRandom(string: book.id + "pulp")
+                for _ in 0..<Int(size.width * size.height / 30) {
+                    let r = CGFloat.random(in: 0.3...0.9, using: &rng)
+                    ctx.fill(Path(ellipseIn: CGRect(x: .random(in: 0..<size.width, using: &rng), y: .random(in: 0..<size.height, using: &rng),
+                                                    width: r, height: r)),
+                             with: .color(.black.opacity(.random(in: 0.05...0.18, using: &rng))))
+                }
+            }
+        case .marbled:
+            Canvas { ctx, size in
+                var rng = SeededRandom(string: book.designKey + "marble")
+                for _ in 0..<26 {
+                    var vein = Path()
+                    var p = CGPoint(x: .random(in: 0...size.width, using: &rng), y: .random(in: 0...size.height, using: &rng))
+                    vein.move(to: p)
+                    for _ in 0..<5 {
+                        let next = CGPoint(x: p.x + .random(in: -size.width...size.width, using: &rng) * 0.6,
+                                           y: p.y + .random(in: 6...26, using: &rng))
+                        vein.addQuadCurve(to: next, control: CGPoint(x: (p.x + next.x) / 2 + .random(in: -10...10, using: &rng), y: (p.y + next.y) / 2))
+                        p = next
+                    }
+                    ctx.stroke(vein, with: .color(Color(hex: recipe.ink).opacity(.random(in: 0.12...0.35, using: &rng))),
+                               lineWidth: .random(in: 0.5...2.2, using: &rng))
+                }
+            }
+        case .pattern(let glyph):
+            Canvas { ctx, size in
+                let text = ctx.resolve(Text(glyph).font(.system(size: 7)).foregroundColor(Color(hex: recipe.ink).opacity(0.28)))
+                var row = 0
+                var y: CGFloat = 4
+                while y < size.height {
+                    var x: CGFloat = row.isMultiple(of: 2) ? 3 : 8
+                    while x < size.width {
+                        ctx.draw(text, at: CGPoint(x: x, y: y))
+                        x += 10
+                    }
+                    y += 9
+                    row += 1
+                }
+            }
+        }
+    }
+}
+
+/// Which ink lettering takes where it crosses an English spine's bands.
+enum SpineInk {
+    struct Stretch: Equatable {
+        var from: CGFloat
+        var to: CGFloat
+        /// The band showing there (the last one printed), or nil for the bare stock.
+        var colour: String?
+    }
+
+    /// The spine from head to foot, cut wherever a band begins or ends.
+    static func stretches(of bands: [SpineRecipe.Band]) -> [Stretch] {
+        let cuts = Set([0, 1] + bands.flatMap { [min(max($0.from, 0), 1), min(max($0.to, 0), 1)] }).sorted()
+        return zip(cuts, cuts.dropFirst()).compactMap { from, to in
+            guard to > from else { return nil }
+            let middle = (from + to) / 2
+            return Stretch(from: from, to: to, colour: bands.last { $0.from <= middle && middle < $0.to }?.colour)
+        }
+    }
+
+    /// The house's ink if it reads on `background`, else its stock, else plain black or cream.
+    static func ink(on background: String, house: String, stock: String) -> String {
+        for candidate in [house, stock] where contrast(candidate, background) >= 3 { return candidate }
+        return contrast("15130F", background) >= contrast("F5F0E4", background) ? "15130F" : "F5F0E4"
+    }
+
+    static func contrast(_ a: String, _ b: String) -> CGFloat {
+        let (x, y) = (luminance(a), luminance(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    private static func luminance(_ hex: String) -> CGFloat {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(hex: hex).getRed(&r, green: &g, blue: &b, alpha: &a)
+        func linear(_ c: CGFloat) -> CGFloat { c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 }

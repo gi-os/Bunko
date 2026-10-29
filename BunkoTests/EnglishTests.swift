@@ -149,3 +149,20 @@ struct VolumeWatchTests {
 
     @MainActor final class Received { var values: [Float] = [] }
 }
+
+struct SpineInkTests {
+    @Test func bandsCutTheSpineIntoStretches() {
+        let bands = [SpineRecipe.Band(from: 0.08, to: 0.3, colour: "2F6F8F"), SpineRecipe.Band(from: 0.22, to: 0.44, colour: "15130F")]
+        let stretches = SpineInk.stretches(of: bands)
+        #expect(stretches.map(\.from) == [0, 0.08, 0.22, 0.3, 0.44])
+        #expect(stretches.map(\.colour) == [nil, "2F6F8F", "15130F", "15130F", nil])
+        #expect(SpineInk.stretches(of: []).count == 1)
+    }
+
+    @Test func letteringReadsOnEveryBackground() {
+        // Dark house ink on cream stock stays; on a dark band it gives way to the stock.
+        #expect(SpineInk.ink(on: "F5F0E4", house: "26221D", stock: "F5F0E4") == "26221D")
+        #expect(SpineInk.ink(on: "15130F", house: "26221D", stock: "F5F0E4") == "F5F0E4")
+        #expect(SpineInk.contrast(SpineInk.ink(on: "2F6F8F", house: "26221D", stock: "F5F0E4"), "2F6F8F") >= 3)
+    }
+}
