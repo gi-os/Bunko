@@ -25,17 +25,24 @@ extension HouseCover {
     private func shimi(w: CGFloat, h: CGFloat) -> some View {
         let brown = Color(hex: "4A3524")
         return ZStack {
-            Color(hex: "E9DDC2")
+            Color(hex: ["E9DDC2", "E3D3B1", "EFE6D2"][house.variant % 3])
             Rectangle().stroke(brown, lineWidth: max(1, w * 0.012)).padding(w * 0.06)
             Rectangle().stroke(brown.opacity(0.8), lineWidth: max(0.5, w * 0.004)).padding(w * 0.085)
+            if house.variant == 2 { Rectangle().stroke(colour, lineWidth: max(0.5, w * 0.003)).padding(w * 0.1) }
             Canvas { ctx, size in
+                // The corners: diamonds, rounds, or (with a third rule) nothing.
+                guard house.variant != 2 else { return }
                 let inset = w * 0.06, d = w * 0.028
                 for p in [CGPoint(x: inset, y: inset), CGPoint(x: size.width - inset, y: inset),
                           CGPoint(x: inset, y: size.height - inset), CGPoint(x: size.width - inset, y: size.height - inset)] {
-                    var diamond = Path()
-                    diamond.addLines([CGPoint(x: p.x, y: p.y - d), CGPoint(x: p.x + d, y: p.y), CGPoint(x: p.x, y: p.y + d), CGPoint(x: p.x - d, y: p.y)])
-                    diamond.closeSubpath()
-                    ctx.fill(diamond, with: .color(brown))
+                    var corner = Path()
+                    if house.variant == 1 {
+                        corner.addEllipse(in: CGRect(x: p.x - d * 0.8, y: p.y - d * 0.8, width: d * 1.6, height: d * 1.6))
+                    } else {
+                        corner.addLines([CGPoint(x: p.x, y: p.y - d), CGPoint(x: p.x + d, y: p.y), CGPoint(x: p.x, y: p.y + d), CGPoint(x: p.x - d, y: p.y)])
+                        corner.closeSubpath()
+                    }
+                    ctx.fill(corner, with: .color(brown))
                 }
             }
             VStack(spacing: h * 0.03) {
@@ -71,7 +78,9 @@ extension HouseCover {
                 }
                 let width = max(1, w * 0.011)
                 ctx.stroke(thread.offsetBy(dx: 0.5, dy: 0.8), with: .color(.black.opacity(0.35)), style: StrokeStyle(lineWidth: width, lineCap: .round))
-                ctx.stroke(thread, with: .color(Color(hex: "EDE6D4")), style: StrokeStyle(lineWidth: width, lineCap: .round))
+                // Thread: undyed, vermilion, or gilt.
+                ctx.stroke(thread, with: .color(Color(hex: ["EDE6D4", "B5362A", "D9B65A"][house.variant % 3])),
+                           style: StrokeStyle(lineWidth: width, lineCap: .round))
                 for y in holes {
                     let r = width * 0.9
                     ctx.fill(Path(ellipseIn: CGRect(x: holeX - r, y: y - r, width: r * 2, height: r * 2)), with: .color(.black.opacity(0.45)))
@@ -103,7 +112,8 @@ extension HouseCover {
     /// folded over the edges.
     private func kirara(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
-            cream
+            // The cover under the glassine: cream, a pale wash of its colour, or white.
+            [cream, Color(uiColor: UIColor(hex: house.colour).mixed(with: .white, 0.8)), Color(hex: "FBFAF6")][house.variant % 3]
             VStack(spacing: h * 0.03) {
                 title(ink, width: w * 0.6, height: h * 0.4, size: w * 0.09)
                 author(colour, w: w)
@@ -136,8 +146,10 @@ extension HouseCover {
 
     /// Bookcloth, dark, its weave in it; the title and a frame stamped in gold foil.
     private func kinu(w: CGFloat, h: CGFloat) -> some View {
-        let gold = LinearGradient(colors: [Color(hex: "9C7A2E"), Color(hex: "E9D58E"), Color(hex: "B8933F"), Color(hex: "F3E6B0"), Color(hex: "8E6E28")],
-                                  startPoint: .topLeading, endPoint: .bottomTrailing)
+        // Gold, silver or copper foil.
+        let foils = [["9C7A2E", "E9D58E", "B8933F", "F3E6B0", "8E6E28"], ["7D8086", "E6E8EB", "A5A9AF", "F5F6F7", "6E7177"],
+                     ["8A4B2C", "E3A07A", "A8623E", "F0C3A4", "7A3F24"]]
+        let gold = LinearGradient(colors: foils[house.variant % 3].map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing)
         return ZStack {
             colour
             Color.black.opacity(0.58)
@@ -173,7 +185,7 @@ extension HouseCover {
 
     /// 空押し: pale paper and no ink on the title, only its relief catching the light.
     private func shimo(w: CGFloat, h: CGFloat) -> some View {
-        let paper = Color(uiColor: UIColor(hex: house.colour).mixed(with: .white, 0.72))
+        let paper = Color(uiColor: UIColor(hex: house.colour).mixed(with: .white, [0.72, 0.6, 0.83][house.variant % 3]))
         return ZStack {
             paper
             VStack(spacing: h * 0.03) {
@@ -198,8 +210,11 @@ extension HouseCover {
             cream
             Canvas { ctx, size in
                 // A vertical title runs down the fore-edge side, so the sun sits towards the spine.
-                let centre = CGPoint(x: size.width * (vertical ? 0.4 : 0.5), y: size.height * (vertical ? 0.3 : 0.25))
-                let radius = size.width * (vertical ? 0.33 : 0.34), pitch = max(2.2, size.width * 0.02)
+                // The sun: centred, smaller and lower, or large and off to one side.
+                let dx: CGFloat = [0, -0.06, 0.08][house.variant % 3], dy: CGFloat = [0, 0.04, -0.03][house.variant % 3]
+                let centre = CGPoint(x: size.width * ((vertical ? 0.4 : 0.5) + dx), y: size.height * ((vertical ? 0.3 : 0.25) + dy))
+                let radius = size.width * (vertical ? 0.33 : 0.34) * [1, 0.82, 1.15][house.variant % 3]
+                let pitch = max(2.2, size.width * [0.02, 0.016, 0.026][house.variant % 3])
                 let n = Int(radius * 1.5 / pitch)
                 var dots = Path()
                 for i in -n...n {
@@ -238,10 +253,24 @@ extension HouseCover {
         return ZStack {
             cream
             ZStack {
-                Circle().fill(colour).frame(width: w * 0.56, height: w * 0.56).offset(x: -w * 0.1, y: -h * 0.27)
-                Rectangle().fill(second).frame(width: w * 0.44, height: h * 0.27)
-                    .offset(x: w * 0.14 + max(0.8, w * 0.004), y: -h * 0.17 + max(0.6, w * 0.003))
-                    .blendMode(.multiply)
+                let slip = CGSize(width: max(0.8, w * 0.004), height: max(0.6, w * 0.003))
+                switch house.variant % 3 {
+                case 0:
+                    Circle().fill(colour).frame(width: w * 0.56, height: w * 0.56).offset(x: -w * 0.1, y: -h * 0.27)
+                    Rectangle().fill(second).frame(width: w * 0.44, height: h * 0.27)
+                        .offset(x: w * 0.14 + slip.width, y: -h * 0.17 + slip.height)
+                        .blendMode(.multiply)
+                case 1:
+                    Circle().fill(colour).frame(width: w * 0.5, height: w * 0.5).offset(x: -w * 0.12, y: -h * 0.25)
+                    Circle().fill(second).frame(width: w * 0.5, height: w * 0.5)
+                        .offset(x: w * 0.13 + slip.width, y: -h * 0.19 + slip.height)
+                        .blendMode(.multiply)
+                default:
+                    Rectangle().fill(colour).frame(width: w * 0.62, height: h * 0.22).offset(x: -w * 0.06, y: -h * 0.27)
+                    Triangle().fill(second).frame(width: w * 0.5, height: h * 0.32)
+                        .offset(x: w * 0.1 + slip.width, y: -h * 0.2 + slip.height)
+                        .blendMode(.multiply)
+                }
             }
             .compositingGroup()
             VStack(spacing: h * 0.025) {
@@ -257,10 +286,12 @@ extension HouseCover {
     /// 木版: a block cut from wood and pressed in the author's colour, the grain in the ink, the
     /// edges not quite straight, the title cut out of it so the paper shows.
     private func kodama(w: CGFloat, h: CGFloat) -> some View {
-        ZStack(alignment: .top) {
-            cream
+        // The third printing reverses it: a pale block pressed on the colour.
+        let inverted = house.variant == 2
+        return ZStack(alignment: .top) {
+            inverted ? colour : cream
             ZStack {
-                colour
+                inverted ? cream : colour
                 Canvas { ctx, size in
                     var grain = ctx
                     grain.rotate(by: .degrees(90))
@@ -268,15 +299,15 @@ extension HouseCover {
                                with: .tiledImage(Image(uiImage: Print.Grain.laid.image), scale: Print.tileScale(coverWidth: size.width) * 1.6))
                 }
                 .blendMode(.overlay)
-                title(cream, width: w * 0.66, height: h * 0.44, size: w * 0.12)
+                title(inverted ? colour : cream, width: w * 0.66, height: h * 0.44, size: w * 0.12)
             }
-            .frame(height: h * 0.6)
+            .frame(height: h * [0.6, 0.5, 0.56][house.variant % 3])
             .clipShape(RoughRect(seed: book.id))
             .padding(w * 0.07)
             VStack(spacing: h * 0.02) {
                 Spacer()
-                author(colour, w: w)
-                foot(colour, w: w)
+                author(inverted ? cream : colour, w: w)
+                foot(inverted ? cream : colour, w: w)
             }
         }
     }
@@ -298,7 +329,7 @@ extension HouseCover {
                 }
                 HStack(spacing: w * 0.03) {
                     Rectangle().fill(colour).frame(width: w * 0.12, height: max(0.5, w * 0.003))
-                    Text("◇").font(.system(size: w * 0.04)).foregroundStyle(colour)
+                    Text(["◇", "❖", "※"][house.variant % 3]).font(.system(size: w * 0.04)).foregroundStyle(colour)
                     Rectangle().fill(colour).frame(width: w * 0.12, height: max(0.5, w * 0.003))
                 }
                 author(ink, w: w)
@@ -318,12 +349,13 @@ extension HouseCover {
     /// edges; a slip pasted on for the title.
     private func aizome(w: CGFloat, h: CGFloat) -> some View {
         ZStack(alignment: vertical ? .topLeading : .top) {
-            Color(hex: "203556")
+            Color(hex: ["203556", "1A2A44", "2C4870"][house.variant % 3])
             Canvas { ctx, size in
                 var rng = SeededRandom(string: book.id + "shibori")
                 var resist = ctx
                 resist.addFilter(.blur(radius: max(0.5, w * 0.005)))
-                let step = w * 0.11, r = w * 0.024
+                // Bound close and small, as made, or wide and large.
+                let step = w * [0.11, 0.08, 0.15][house.variant % 3], r = w * [0.024, 0.017, 0.034][house.variant % 3]
                 var row = 0
                 var y = step * 0.5
                 while y < size.height + step {
@@ -387,5 +419,15 @@ extension UIColor {
         getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
         other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
         return UIColor(red: r1 + (r2 - r1) * amount, green: g1 + (g2 - g1) * amount, blue: b1 + (b2 - b1) * amount, alpha: a1 + (a2 - a1) * amount)
+    }
+}
+
+/// A triangle standing on its base.
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addLines([CGPoint(x: rect.midX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY)])
+        path.closeSubpath()
+        return path
     }
 }

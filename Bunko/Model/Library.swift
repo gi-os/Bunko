@@ -21,7 +21,7 @@ final class Library {
             .appendingPathComponent("Library", isDirectory: true)
         try? FileManager.default.createDirectory(at: booksFolder, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: indexURL), let saved = try? JSONDecoder().decode([Book].self, from: data) {
-            books = saved
+            books = Look.assign(saved)
         }
     }
 
@@ -74,10 +74,13 @@ final class Library {
         try data.write(to: fileURL(for: book), options: .atomic)
         if let cover { try? cover.write(to: coverURL(for: book.id), options: .atomic) }
         coverCache[book.id] = nil
+        // A book added again (downloaded again, say) keeps the cover it had.
+        var added = book
+        added.look = books.first { $0.id == book.id }?.look
         books.removeAll { $0.id == book.id }
-        books.insert(book, at: 0)
+        books.insert(added, at: 0)
         save()
-        return book
+        return books.first { $0.id == added.id } ?? added
     }
 
     /// Replaces a book's details (same ID, same file).
@@ -127,6 +130,8 @@ final class Library {
     }
 
     private func save() {
+        // Every book on the shelf wears a cover nobody else does.
+        books = Look.assign(books)
         guard let data = try? JSONEncoder().encode(books) else { return }
         try? data.write(to: indexURL, options: .atomic)
     }

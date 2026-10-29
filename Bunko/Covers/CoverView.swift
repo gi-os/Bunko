@@ -49,8 +49,14 @@ struct PaperCover: View {
     let book: Book
     var large = false
 
+    private var look: Look { Look.of(book) }
+
     var body: some View {
-        let base = UIColor(hex: style.baseHex)
+        let look = Look.of(book)
+        // Unless a colour was chosen, this copy's paper came from a batch a shade lighter or darker.
+        let base = style.tint == nil
+            ? UIColor(hex: style.baseHex).mixed(with: look.shade < 0 ? .white : .black, 0.07 * CGFloat(abs(look.shade)))
+            : UIColor(hex: style.baseHex)
         let ink = Color(hex: style.paper.ink)
         let unit: CGFloat = large ? 2.4 : 1
         Canvas { ctx, size in
@@ -58,7 +64,9 @@ struct PaperCover: View {
             var rng = SeededRandom(string: book.id + style.paper.rawValue)
             if style.paper == .kraft && style.tint == nil {
                 // The real thing: a scan of ribbed kraft wrapping paper.
-                ctx.fill(Path(rect), with: .tiledImage(Image(uiImage: Print.kraft), scale: Print.tileScale(coverWidth: size.width)))
+                ctx.fill(Path(rect), with: .tiledImage(Image(uiImage: Print.kraft), origin: CGPoint(x: -look.phase * size.width, y: 0),
+                                                       scale: Print.tileScale(coverWidth: size.width)))
+                if look.shade != 0 { ctx.fill(Path(rect), with: .color((look.shade < 0 ? Color.white : .black).opacity(0.07))) }
             } else {
                 ctx.fill(Path(rect), with: .color(Color(uiColor: base)))
                 drawTexture(&ctx, size: size, rng: &rng, base: Color(uiColor: base), ink: ink)
@@ -102,8 +110,11 @@ struct PaperCover: View {
         let area = size.width * size.height
         switch style.paper.texture {
         case .speckle, .waves, .hemp:
-            if style.paper.texture == .waves { Self.drawWaves(&ctx, size: size, scale: size.width, base: base, ink: ink) }
-            if style.paper.texture == .hemp { Self.drawHemp(&ctx, size: size, scale: size.width, ink: ink) }
+            // The roll was cut wherever it was cut: the print starts somewhere else on every copy.
+            var printed = ctx
+            printed.translateBy(x: -look.phase * size.width * 0.15, y: -look.phase * size.width * 0.07)
+            if style.paper.texture == .waves { Self.drawWaves(&printed, size: size, scale: size.width, base: base, ink: ink) }
+            if style.paper.texture == .hemp { Self.drawHemp(&printed, size: size, scale: size.width, ink: ink) }
             // The odd inclusion in the pulp; the scanned grain does the rest.
             for _ in 0..<Int(area / 700) {
                 let r = CGFloat.random(in: 0.4...1.3, using: &rng)
@@ -191,7 +202,8 @@ struct PaperCover: View {
             let numberRoom = number == nil ? 0 : fontSize * 1.6
             let (columns, glyph) = Self.verticalSlip(count: chars.count, base: fontSize, height: height - numberRoom)
             let column = glyph * 1.15
-            let rect = CGRect(x: size.width * 0.16, y: size.height * 0.07, width: glyph * 1.9 + column * CGFloat(columns - 1), height: height)
+            let rect = CGRect(x: size.width * (0.16 + look.slipShift.width), y: size.height * (0.07 + look.slipShift.height),
+                              width: glyph * 1.9 + column * CGFloat(columns - 1), height: height)
             var slip = pasteSlip(ctx, rect: rect, unit: unit)
             let perColumn = (chars.count + columns - 1) / columns
             for (i, ch) in chars.enumerated() {
@@ -204,7 +216,8 @@ struct PaperCover: View {
                           at: CGPoint(x: rect.maxX - glyph * 0.95, y: rect.maxY - fontSize * 0.9))
             }
         } else {
-            let rect = CGRect(x: size.width * 0.14, y: size.height * 0.1, width: size.width * 0.72, height: size.height * 0.22)
+            let rect = CGRect(x: size.width * (0.14 + look.slipShift.width), y: size.height * (0.1 + look.slipShift.height),
+                              width: size.width * 0.72, height: size.height * 0.22)
             var slip = pasteSlip(ctx, rect: rect, unit: unit)
             let byline = book.author.isEmpty && number == nil ? 0 : fontSize * 0.95
             let room = CGRect(x: rect.minX + 6 * unit, y: rect.minY + 5 * unit,
@@ -295,10 +308,12 @@ struct PaperCover: View {
     /// The shop's stamp, inked a little crooked near the foot.
     private func drawStamp(_ ctx: inout GraphicsContext, size: CGSize, ink: Color, unit: CGFloat) {
         let diameter = size.width * 0.34
-        let center = CGPoint(x: book.rightToLeft ? size.width * 0.36 : size.width * 0.66, y: size.height * 0.8)
+        // Pressed wherever the clerk's hand came down.
+        let center = CGPoint(x: size.width * ((book.rightToLeft ? 0.36 : 0.66) + look.stampShift.width),
+                             y: size.height * (0.8 + look.stampShift.height))
         var stamp = ctx
         stamp.translateBy(x: center.x, y: center.y)
-        stamp.rotate(by: .degrees(-9))
+        stamp.rotate(by: .degrees(look.stampTurn))
         stamp.opacity = 0.85
         var rng = SeededRandom(string: book.id + style.stamp + "stamp")
         stamp.drawLayer { stamp in
@@ -359,8 +374,9 @@ struct PaperCover: View {
                      height: em * 0.92 * CGFloat(lines.count))
         let box = CGRect(x: 0, y: 0, width: content.width + pad * 2, height: content.height + pad * 2)
         var seal = ctx
-        seal.translateBy(x: book.rightToLeft ? size.width * 0.36 : size.width * 0.68, y: size.height * 0.8)
-        seal.rotate(by: .degrees(-4))
+        seal.translateBy(x: size.width * ((book.rightToLeft ? 0.36 : 0.68) + look.stampShift.width),
+                         y: size.height * (0.8 + look.stampShift.height))
+        seal.rotate(by: .degrees(look.stampTurn * 0.4))
         seal.scaleBy(x: min(size.width * 0.3 / box.width, size.height * 0.2 / box.height),
                      y: min(size.width * 0.3 / box.width, size.height * 0.2 / box.height))
         seal.translateBy(x: -box.midX, y: -box.midY)

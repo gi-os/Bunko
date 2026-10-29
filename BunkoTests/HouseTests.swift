@@ -15,11 +15,10 @@ struct HouseTests {
         #expect(House.of(book("こころ", by: "夏目漱石", rtl: true)).shelfCode.hasPrefix("な "))
     }
 
-    @Test func anAuthorKeepsTheirColourAcrossBooks() {
+    @Test func anAuthorKeepsTheirNumberAcrossBooks() {
         let a = House.of(book("こころ", by: "夏目漱石", rtl: true))
         let b = House.of(book("坊っちゃん", by: "夏目漱石", rtl: true))
-        #expect(a.colour == b.colour)
-        // The author's number in the shelf code is theirs too.
+        // The author's number in the shelf code is theirs, whatever each book looks like.
         #expect(a.shelfCode.split(separator: " ")[1] == b.shelfCode.split(separator: " ")[1])
     }
 
